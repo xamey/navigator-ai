@@ -10,59 +10,74 @@ function createExtensionContainer() {
     let container = document.getElementById('browser-automation-extension');
     if (container) {
         console.log('Container already exists');
-        container.style.display = 'block'; // Make sure it's visible
+        container.style.display = 'block';
         return container;
     }
 
     // Create container for the extension
     container = document.createElement('div');
     container.id = 'browser-automation-extension';
-    container.className = 'browser-automation-container';
 
-    // Set styles directly on container
+    // Only set these essential properties directly on the container
     container.style.position = 'fixed';
     container.style.bottom = '20px';
     container.style.right = '20px';
-    container.style.zIndex = '2147483647'; // Maximum z-index
-    container.style.width = '400px';
-    container.style.minWidth = '400px';
-    container.style.backgroundColor = 'transparent';
-    container.style.border = 'none';
-    container.style.borderRadius = '8px';
-    container.style.overflow = 'visible';
-    container.style.boxShadow = 'none';
+    container.style.zIndex = '9999999'; // Still high but not maximum
+    container.style.pointerEvents = 'none'; // Important! Allow clicks to pass through
     container.style.transition = 'all 0.3s ease';
 
-    // Create iframe to load the popup content
+    // Create a shadow root - this isolates our CSS
+    const shadow = container.attachShadow({ mode: 'closed' });
+
+    // Create a wrapper inside the shadow DOM that will catch pointer events
+    const wrapper = document.createElement('div');
+    wrapper.className = 'extension-wrapper';
+    wrapper.style.pointerEvents = 'auto';
+    wrapper.style.position = 'relative';
+
+    // Create styles for shadow DOM
+    const style = document.createElement('style');
+    style.textContent = `
+        .extension-wrapper {
+            width: 400px;
+            height: auto;
+            max-height: 550px;
+        }
+        iframe {
+            width: 100%;
+            height: 550px;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+            background-color: transparent;
+        }
+        .drag-handle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 30px;
+            cursor: move;
+            z-index: 1;
+        }
+    `;
+
+    // Create iframe
     const iframe = document.createElement('iframe');
-    iframe.style.width = '400px';
-    iframe.style.minWidth = '400px';
-    iframe.style.height = '550px';
-    iframe.style.border = 'none';
-    iframe.style.borderRadius = '8px';
-    iframe.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.25)';
-    iframe.style.backgroundColor = 'transparent';
-    iframe.style.display = 'block';
     iframe.src = chrome.runtime.getURL('popup.html');
 
     // Create drag handle
     const dragHandle = document.createElement('div');
-    dragHandle.style.position = 'absolute';
-    dragHandle.style.top = '0';
-    dragHandle.style.left = '0';
-    dragHandle.style.width = '100%';
-    dragHandle.style.height = '30px';
-    dragHandle.style.cursor = 'move';
-    dragHandle.style.zIndex = '2147483646';
-    dragHandle.style.backgroundColor = 'transparent';
+    dragHandle.className = 'drag-handle';
 
-    // Add elements to container
-    container.appendChild(iframe);
-    container.appendChild(dragHandle);
+    // Add elements to shadow DOM
+    shadow.appendChild(style);
+    shadow.appendChild(wrapper);
+    wrapper.appendChild(iframe);
+    wrapper.appendChild(dragHandle);
 
-    // Add container to the document body
+    // Add container to document body
     document.body.appendChild(container);
-    console.log('Container added to document body');
 
     // Make draggable
     initDraggable(container, dragHandle);
@@ -78,11 +93,13 @@ function initDraggable(container: HTMLElement, dragHandle: HTMLElement) {
     let initialX: number;
     let initialY: number;
 
-    dragHandle.addEventListener('mousedown', dragStart);
-    document.addEventListener('mousemove', drag);
-    document.addEventListener('mouseup', dragEnd);
+    dragHandle.addEventListener('mousedown', dragStart, { passive: false });
 
     function dragStart(e: MouseEvent) {
+        // Stop event propagation so the page doesn't receive this event
+        e.stopPropagation();
+        e.preventDefault();
+
         console.log('Drag start');
 
         // Get current position relative to the viewport
@@ -91,42 +108,46 @@ function initDraggable(container: HTMLElement, dragHandle: HTMLElement) {
         initialY = e.clientY - rect.top;
 
         isDragging = true;
-        e.preventDefault();
+
+        document.addEventListener('mousemove', drag, { passive: false });
+        document.addEventListener('mouseup', dragEnd, { passive: false });
     }
 
     function drag(e: MouseEvent) {
         if (!isDragging) return;
 
+        // Stop event propagation to prevent page interaction issues
+        e.stopPropagation();
         e.preventDefault();
 
         // Calculate new position
         currentX = e.clientX - initialX;
         currentY = e.clientY - initialY;
 
-        // Ensure the extension stays within viewport bounds
-        currentX = Math.max(0, Math.min(currentX, window.innerWidth - container.offsetWidth));
-        currentY = Math.max(0, Math.min(currentY, window.innerHeight - container.offsetHeight));
+        // Constrain to viewport
+        const maxX = window.innerWidth - container.offsetWidth;
+        const maxY = window.innerHeight - container.offsetHeight;
 
-        // Apply the new position
+        currentX = Math.max(0, Math.min(currentX, maxX));
+        currentY = Math.max(0, Math.min(currentY, maxY));
+
+        // Apply new position
         container.style.left = `${currentX}px`;
         container.style.top = `${currentY}px`;
         container.style.right = 'auto';
         container.style.bottom = 'auto';
     }
 
-    function dragEnd() {
-        if (isDragging) {
-            console.log('Drag end');
-            isDragging = false;
+    function dragEnd(e: MouseEvent) {
+        // Stop event propagation
+        e.stopPropagation();
 
-            // Save position to storage
-            chrome.storage.local.set({
-                extensionPosition: {
-                    x: currentX,
-                    y: currentY
-                }
-            });
-        }
+        initialX = currentX;
+        initialY = currentY;
+        isDragging = false;
+
+        document.removeEventListener('mousemove', drag);
+        document.removeEventListener('mouseup', dragEnd);
     }
 }
 
