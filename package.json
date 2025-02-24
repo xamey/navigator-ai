@@ -1,0 +1,22 @@
+{
+  "name": "navigator-ai",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "packages/components/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "dev:server": "cd apps/server && fastapi dev main.py --port=8004",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\""
+  },
+  "packageManager": "pnpm@10.4.1",
+  "devDependencies": {
+    "turbo": "latest",
+    "concurrently": "latest"
+  }
+}
