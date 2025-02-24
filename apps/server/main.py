@@ -85,9 +85,6 @@ async def update_task(update: DOMUpdate):
             "results": update.result
         }
 
-        with open(metadata_filename, "w", encoding="utf-8") as f:
-            json.dump(metadata, f, indent=2)
-
         return {
             "status": "success",
             "message": "DOM update received and stored",
@@ -95,34 +92,6 @@ async def update_task(update: DOMUpdate):
                 "html": filename,
                 "metadata": metadata_filename
             }
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/tasks/{task_id}/status")
-async def get_task_status(task_id: str):
-    try:
-        # Here you would typically query your database
-        # For now, we'll just check if there are any snapshots for this task
-        snapshots_dir = "dom_snapshots"
-        task_files = [f for f in os.listdir(
-            snapshots_dir) if f.startswith(f"task_{task_id}")]
-
-        if not task_files:
-            raise HTTPException(status_code=404, detail="Task not found")
-
-        snapshots = []
-        for file in task_files:
-            if file.endswith("_metadata.json"):
-                with open(f"{snapshots_dir}/{file}", "r", encoding="utf-8") as f:
-                    metadata = json.load(f)
-                    snapshots.append(metadata)
-
-        return {
-            "task_id": task_id,
-            "snapshot_count": len(snapshots),
-            "snapshots": snapshots
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,5 +1,7 @@
 import react from '@vitejs/plugin-react'
+import autoprefixer from 'autoprefixer'
 import { dirname, resolve } from 'path'
+import tailwindcss from 'tailwindcss'
 import { fileURLToPath } from 'url'
 import { defineConfig } from 'vite'
 
@@ -8,9 +10,17 @@ const __dirname = dirname(__filename)
 
 export default defineConfig({
   plugins: [react()],
+  css: {
+    postcss: {
+      plugins: [
+        tailwindcss('./tailwind.config.js'),
+        autoprefixer()
+      ]
+    }
+  },
   build: {
     outDir: 'dist',
-    emptyOutDir: false, // Important: don't clear dist folder
+    emptyOutDir: false,
     rollupOptions: {
       input: {
         popup: resolve(__dirname, 'popup.html')

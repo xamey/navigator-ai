@@ -19,6 +19,11 @@ chrome.storage.local.get(['activeSession'], (result) => {
     }
 });
 
+chrome.action.onClicked.addListener((tab) => {
+    // Send a message to toggle the UI
+    chrome.tabs.sendMessage(tab.id!, { action: "toggleUI" });
+});
+
 chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
     try {
         if (message.type === 'startTask') {

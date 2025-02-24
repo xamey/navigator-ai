@@ -1,10 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Browser Automation Extension",
-  "version": "0.1",
-  "description": "A browser extension for automation.",
-  "permissions": ["activeTab", "scripting", "storage"],
-  "host_permissions": ["http://localhost:8000/*"],
+  "name": "Navigator AI",
+  "version": "1.0.0",
   "action": {
     "default_popup": "popup.html"
   },
@@ -15,7 +12,12 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "css": ["assets/popup.css"]
     }
-  ]
+  ],
+  "permissions": ["activeTab", "scripting", "storage"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
+  }
 }

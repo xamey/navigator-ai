@@ -1,3 +1,140 @@
+
+================================================================================
+File: build.ts
+================================================================================
+
+// build.ts
+import fs from 'fs-extra'
+import { dirname, resolve } from 'path'
+import { fileURLToPath } from 'url'
+import { build } from 'vite'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+async function buildExtension() {
+    // Clean dist folder first
+    console.log('Cleaning dist folder...')
+    await fs.remove('dist')
+    await fs.ensureDir('dist')
+
+    // Build in sequence
+    console.log('Building popup...')
+    await build({
+        configFile: resolve(__dirname, 'vite.popup.config.ts'),
+        mode: 'production'
+    })
+
+    console.log('Building background script...')
+    await build({
+        configFile: resolve(__dirname, 'vite.background.config.ts'),
+        mode: 'production'
+    })
+
+    console.log('Building content script...')
+
+    await build({
+        configFile: resolve(__dirname, 'vite.content.config.ts'),
+        mode: 'production'
+    })
+
+    // copy postcss.config.js to dist
+    console.log('Copying postcss.config.js...')
+    await fs.copy(
+        resolve(__dirname, 'postcss.config.js'),
+        resolve(__dirname, 'dist/postcss.config.js')
+    )
+
+    // copy tailwind.config.js to dist
+    console.log('Copying tailwind.config.js...')
+    await fs.copy(
+        resolve(__dirname, 'tailwind.config.js'),
+        resolve(__dirname, 'dist/tailwind.config.js')
+    )
+
+    // Copy manifest and other assets
+    console.log('Copying manifest...')
+    await fs.copy(
+        resolve(__dirname, 'public/manifest.json'),
+        resolve(__dirname, 'dist/manifest.json')
+    )
+
+    console.log('Build complete!')
+}
+
+buildExtension().catch((err) => {
+    console.error('Build failed:', err)
+    process.exit(1)
+})
+
+
+================================================================================
+File: eslint.config.js
+================================================================================
+
+import js from '@eslint/js'
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import tseslint from 'typescript-eslint'
+
+export default tseslint.config(
+  { ignores: ['dist'] },
+  {
+    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+    },
+    plugins: {
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+    },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true },
+      ],
+    },
+  },
+)
+
+
+
+================================================================================
+File: manifest.json
+================================================================================
+
+{
+  "manifest_version": 3,
+  "name": "Browser Automation Extension",
+  "version": "0.1",
+  "description": "A browser extension for automation.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://localhost:8000/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}
+
+
+
+================================================================================
+File: package-lock.json
+================================================================================
+
 {
   "name": "extension",
   "version": "0.0.0",
@@ -2801,3 +2938,981 @@
     }
   }
 }
+
+
+
+================================================================================
+File: package.json
+================================================================================
+
+{
+  "name": "extension",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config vite.popup.config.ts",
+    "build": "rimraf dist && tsx build.ts",
+    "build:chrome": "rimraf dist && cross-env TARGET=chrome tsx build.ts",
+    "build:firefox": "rimraf dist && cross-env TARGET=firefox tsx build.ts"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.19.0",
+    "@types/chrome": "^0.0.306",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.17.19",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.19.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.18",
+    "fs-extra": "^11.3.0",
+    "globals": "^15.14.0",
+    "postcss": "^8.5.3",
+    "rimraf": "^6.0.1",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.3",
+    "typescript": "~5.7.2",
+    "typescript-eslint": "^8.22.0",
+    "vite": "^6.1.0",
+    "vite-plugin-web-extension": "^4.4.3"
+  }
+}
+
+
+
+================================================================================
+File: popup.html
+================================================================================
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Browser Automation</title>
+  <link rel="stylesheet" href="./assets/popup.css"> <!-- Make sure this is included -->
+  <style>
+    /* Add some basic styles until Tailwind loads */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      width: 320px;
+      padding: 0;
+      margin: 0;
+    }
+
+    /* Include a few essential Tailwind-like styles */
+    .container {
+      padding: 16px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      background-color: #4F46E5;
+      color: white;
+      border-radius: 4px;
+    }
+
+    .input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>
+
+
+================================================================================
+File: postcss.config.js
+================================================================================
+
+export const plugins = {
+    tailwindcss: {},
+    autoprefixer: {},
+}; 
+
+
+================================================================================
+File: tailwind.config.js
+================================================================================
+
+/** @type {import('tailwindcss').Config} */
+export default {
+    content: [
+        "./index.html",
+        "./src/**/*.{js,ts,jsx,tsx}",
+    ],
+    theme: {
+        extend: {
+            animation: {
+                'slide-up': 'slideUp 0.3s ease-out',
+                'slide-down': 'slideDown 0.3s ease-out',
+            },
+            keyframes: {
+                slideUp: {
+                    '0%': { transform: 'translateY(100%)' },
+                    '100%': { transform: 'translateY(0)' },
+                },
+                slideDown: {
+                    '0%': { transform: 'translateY(0)' },
+                    '100%': { transform: 'translateY(100%)' },
+                },
+            }
+        },
+    },
+    plugins: [],
+} 
+
+
+================================================================================
+File: tsconfig.app.json
+================================================================================
+
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"]
+}
+
+
+
+================================================================================
+File: tsconfig.json
+================================================================================
+
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
+
+
+
+================================================================================
+File: tsconfig.node.json
+================================================================================
+
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["vite.popup.config.ts"]
+}
+
+
+
+================================================================================
+File: vite.background.config.ts
+================================================================================
+
+import { dirname, resolve } from 'path'
+import { fileURLToPath } from 'url'
+import { defineConfig } from 'vite'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+export default defineConfig({
+    build: {
+        outDir: 'dist',
+        emptyOutDir: false, // Important: don't clear dist folder
+        lib: {
+            entry: resolve(__dirname, 'src/background.ts'),
+            formats: ['iife'],
+            name: 'background',
+            fileName: () => 'background.js'
+        },
+        rollupOptions: {
+            output: {
+                extend: true,
+                dir: 'dist',
+                entryFileNames: 'background.js'
+            }
+        }
+    }
+})
+
+
+================================================================================
+File: vite.content.config.ts
+================================================================================
+
+import { dirname, resolve } from 'path'
+import { fileURLToPath } from 'url'
+import { defineConfig } from 'vite'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+export default defineConfig({
+    build: {
+        outDir: 'dist',
+        emptyOutDir: false, // Important: don't clear dist folder
+        lib: {
+            entry: resolve(__dirname, 'src/content.ts'),
+            formats: ['iife'],
+            name: 'content',
+            fileName: () => 'content.js'
+        }
+    }
+})
+
+
+================================================================================
+File: vite.popup.config.ts
+================================================================================
+
+import react from '@vitejs/plugin-react'
+import { dirname, resolve } from 'path'
+import { fileURLToPath } from 'url'
+import { defineConfig } from 'vite'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+export default defineConfig({
+  plugins: [react()],
+  css: {
+    postcss: './postcss.config.js'
+  },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: false, // Important: don't clear dist folder
+    rollupOptions: {
+      input: {
+        popup: resolve(__dirname, 'popup.html')
+      },
+      output: {
+        format: 'es',
+        dir: 'dist',
+        entryFileNames: '[name].js',
+        assetFileNames: 'assets/[name].[ext]'
+      }
+    }
+  }
+})
+
+
+================================================================================
+File: public/manifest.json
+================================================================================
+
+{
+  "manifest_version": 3,
+  "name": "Navigator AI",
+  "version": "1.0.0",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["assets/popup.css"]
+    }
+  ],
+  "permissions": ["activeTab", "scripting", "storage"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
+  }
+}
+
+
+
+================================================================================
+File: src/App.css
+================================================================================
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+
+
+================================================================================
+File: src/App.tsx
+================================================================================
+
+import { useState } from 'react'
+import './App.css'
+import reactLogo from './assets/react.svg'
+import viteLogo from '/vite.svg'
+
+
+function App() {
+  const [count, setCount] = useState(0)
+
+  return (
+    <>
+      <div>
+        <a href="https://vite.dev" target="_blank">
+          <img src={viteLogo} className="logo" alt="Vite logo" />
+        </a>
+        <a href="https://react.dev" target="_blank">
+          <img src={reactLogo} className="logo react" alt="React logo" />
+        </a>
+      </div>
+      <h1>Vite + React</h1>
+      <div className="card">
+        <button onClick={() => setCount((count) => count + 1)}>
+          count is {count}
+        </button>
+        <p>
+          Edit <code>src/App.tsx</code> and save to test HMR
+        </p>
+      </div>
+      <p className="read-the-docs">
+        Click on the Vite and React logos to learn more
+      </p>
+    </>
+  )
+}
+
+export default App
+
+
+
+================================================================================
+File: src/background.ts
+================================================================================
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { DOMUpdate, Message } from './types';
+
+const API_BASE_URL = 'http://localhost:8000';
+let monitoringInterval: NodeJS.Timeout | null = null;
+const MAX_ITERATIONS = 3;
+let currentIterations = 0;
+
+// Store active task session
+let activeSession: {
+    taskId: string;
+    status: 'active' | 'completed' | 'error';
+} | null = null;
+
+// Initialize session from storage on extension load
+chrome.storage.local.get(['activeSession'], (result) => {
+    if (result.activeSession) {
+        activeSession = result.activeSession;
+    }
+});
+
+chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
+    try {
+        if (message.type === 'startTask') {
+            handleStartTask(message, sendResponse);
+        } else if (message.type === 'startMonitoring') {
+            startMonitoring(message.task_id!);
+        } else if (message.type === 'stopMonitoring') {
+            stopMonitoring();
+        } else if (message.type === 'dom_update') {
+            handleDOMUpdate(message);
+        }
+    } catch (error) {
+        console.error('Error in background script:', error);
+        sendResponse({ error: 'Background script error' });
+    }
+    return true;
+});
+
+async function handleDOMUpdate(message: Message) {
+    if (!message.task_id || !message.dom_data) {
+        console.error('Missing required fields in DOM update');
+        return;
+    }
+
+    const updateData: DOMUpdate = {
+        task_id: message.task_id,
+        dom_data: message.dom_data,
+        result: Array.isArray(message.result) ? message.result : []  // Ensure result is always an array
+    };
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/tasks/update`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(updateData),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`Server error ${response.status}: ${JSON.stringify(errorData)}`);
+        }
+
+        const data = await response.json();
+        console.log('DOM update successful:', data);
+    } catch (error) {
+        console.error('Error sending DOM update:', error);
+        // Optionally update active session status on error
+        if (activeSession) {
+            activeSession.status = 'error';
+            await chrome.storage.local.set({ activeSession });
+        }
+    }
+}
+
+async function handleStartTask(message: Message, sendResponse: (response?: any) => void) {
+    try {
+        // If there's an active session, use that task ID
+        if (activeSession?.taskId && activeSession.status === 'active') {
+            sendResponse({ task_id: activeSession.taskId });
+            return;
+        }
+
+        // Otherwise create a new task
+        const response = await fetch(`${API_BASE_URL}/tasks/create`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ task: message.task }),
+        });
+
+        const data = await response.json();
+
+        // Store the new session
+        activeSession = {
+            taskId: data.task_id,
+            status: 'active'
+        };
+
+        // Persist session
+        await chrome.storage.local.set({ activeSession });
+
+        sendResponse({ task_id: data.task_id });
+    } catch (error) {
+        console.error('Error creating task:', error);
+        sendResponse({ error: 'Failed to create task' });
+    }
+}
+
+function startMonitoring(task_id: string) {
+    if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+    }
+
+    currentIterations = 0;
+    monitoringInterval = setInterval(async () => {
+        if (currentIterations >= MAX_ITERATIONS) {
+            stopMonitoring();
+            if (activeSession) {
+                activeSession.status = 'completed';
+                await chrome.storage.local.set({ activeSession });
+            }
+            return;
+        }
+
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tabs[0]?.id) {
+            try {
+                await chrome.scripting.executeScript({
+                    target: { tabId: tabs[0].id },
+                    files: ['content.js']
+                });
+
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    type: 'processDOM',
+                    task_id
+                });
+
+                currentIterations++;
+
+                // Update popup with current iterations
+                const taskState = await chrome.storage.local.get(['taskState']);
+                if (taskState.taskState) {
+                    await chrome.storage.local.set({
+                        taskState: {
+                            ...taskState.taskState,
+                            iterations: currentIterations
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error in monitoring loop:', error);
+                if (activeSession) {
+                    activeSession.status = 'error';
+                    await chrome.storage.local.set({ activeSession });
+                }
+            }
+        }
+    }, 2000);
+}
+
+function stopMonitoring() {
+    if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+        monitoringInterval = null;
+    }
+} 
+
+
+================================================================================
+File: src/content.ts
+================================================================================
+
+import { FrontendDOMState, Message } from './types';
+
+function processDOM(task_id: string): FrontendDOMState {
+    try {
+        const domData: FrontendDOMState = {
+            url: window.location.href,
+            // Get the complete HTML content
+            html: document.documentElement.outerHTML,
+            // Additional metadata about the page
+            title: document.title,
+            timestamp: new Date().toISOString()
+        };
+
+        // Send data back to background script
+        chrome.runtime.sendMessage({
+            type: 'dom_update',
+            task_id,
+            dom_data: domData,
+            result: []
+        });
+
+        return domData;
+    } catch (error) {
+        console.error('Error processing DOM:', error);
+        throw error;
+    }
+}
+
+// Listen for messages from the background script
+chrome.runtime.onMessage.addListener((message: Message) => {
+    if (message.type === 'processDOM' && message.task_id) {
+        processDOM(message.task_id);
+    }
+}); 
+
+
+================================================================================
+File: src/index.css
+================================================================================
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.popup-container {
+  @apply fixed bottom-4 right-4 z-50;
+}
+
+.popup-minimized {
+  @apply w-12 h-12 rounded-full bg-blue-600 cursor-pointer 
+         flex items-center justify-center shadow-lg
+         hover:bg-blue-700 transition-all duration-200;
+}
+
+.popup-expanded {
+  @apply bg-white dark:bg-gray-800 rounded-lg shadow-xl 
+         w-80 p-4 animate-slide-up;
+}
+
+.popup-header {
+  @apply flex items-center justify-between mb-4;
+}
+
+.input-field {
+  @apply w-full px-3 py-2 border rounded-lg 
+         dark:bg-gray-700 dark:border-gray-600
+         focus:ring-2 focus:ring-blue-500 outline-none;
+}
+
+.button-primary {
+  @apply w-full mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg
+         hover:bg-blue-700 transition-colors duration-200;
+}
+
+.button-stop {
+  @apply w-full mt-3 px-4 py-2 bg-red-600 text-white rounded-lg
+         hover:bg-red-700 transition-colors duration-200;
+}
+
+
+
+================================================================================
+File: src/main.tsx
+================================================================================
+
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import './index.css'
+import Popup from './popup'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <Popup />
+  </React.StrictMode>,
+)
+
+
+
+================================================================================
+File: src/popup.tsx
+================================================================================
+
+import { useEffect, useState } from 'react';
+import type { Message, TaskState } from './types';
+
+import './App.css';
+import './index.css';
+
+export default function Popup() {
+    const [state, setState] = useState<TaskState>({
+        taskId: null,
+        status: 'idle',
+        task: '',
+        isRunning: false,
+        iterations: 0
+    });
+    const [isMinimized, setIsMinimized] = useState(false);
+
+    useEffect(() => {
+        // Load both task state and active session
+        chrome.storage.local.get(['taskState', 'isMinimized', 'activeSession'], (result) => {
+            if (result.taskState) {
+                setState(result.taskState);
+            }
+
+            // Load minimized state
+            if (result.isMinimized !== undefined) {
+                setIsMinimized(result.isMinimized);
+            }
+
+            // If there's an active session, update the state
+            if (result.activeSession?.taskId && result.activeSession.status === 'active') {
+                setState(prev => ({
+                    ...prev,
+                    taskId: result.activeSession.taskId,
+                    status: 'running',
+                    isRunning: true
+                }));
+            }
+        });
+    }, []);
+
+    // Save minimized state when it changes
+    useEffect(() => {
+        chrome.storage.local.set({ isMinimized });
+    }, [isMinimized]);
+
+    const handleStartTask = async () => {
+        if (!state.task.trim()) {
+            return; // Don't start empty tasks
+        }
+
+        try {
+            setState(prev => ({ ...prev, status: 'running' }));
+
+            const message: Message = {
+                type: 'startTask',
+                task: state.task
+            };
+
+            const response = await chrome.runtime.sendMessage(message);
+
+            if (response?.task_id) {
+                const newState: TaskState = {
+                    ...state,
+                    taskId: response.task_id,
+                    status: 'running',
+                    isRunning: true,
+                    iterations: 0
+                };
+
+                await chrome.storage.local.set({ taskState: newState });
+                setState(newState);
+
+                // Start the monitoring loop
+                chrome.runtime.sendMessage({ type: 'startMonitoring', task_id: response.task_id });
+            }
+        } catch (error) {
+            console.error('Error starting task:', error);
+            setState(prev => ({ ...prev, status: 'error' }));
+        }
+    };
+
+    const handleStopTask = async () => {
+        try {
+            setState(prev => ({ ...prev, status: 'completed' }));
+            chrome.runtime.sendMessage({ type: 'stopMonitoring' });
+            const newState: TaskState = {
+                ...state,
+                status: 'idle',
+                isRunning: false
+            };
+            await chrome.storage.local.set({ taskState: newState });
+            setState(newState);
+        } catch (error) {
+            console.error('Error stopping task:', error);
+        }
+    };
+
+    // Status badge color
+    const getStatusColor = () => {
+        switch (state.status) {
+            case 'running': return 'bg-green-500';
+            case 'error': return 'bg-red-500';
+            case 'completed': return 'bg-yellow-500';
+            default: return 'bg-gray-400';
+        }
+    };
+
+    if (isMinimized) {
+        return (
+            <div className="fixed bottom-4 right-4 z-50">
+                <button
+                    onClick={() => setIsMinimized(false)}
+                    className="btn flex items-center justify-center w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg transition-all duration-300 hover:shadow-xl"
+                    title="Open Automation Panel"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-6 w-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                </button>
+                {state.isRunning && (
+                    <div className="absolute top-0 right-0 w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                <h2 className="text-lg font-medium text-gray-800 dark:text-white flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                    </svg>
+                    Browser Automation
+                </h2>
+                <button
+                    onClick={() => setIsMinimized(true)}
+                    className="p-1 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    title="Minimize"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 space-y-4">
+                <div>
+                    <label htmlFor="task-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Task Description
+                    </label>
+                    <input
+                        id="task-input"
+                        type="text"
+                        value={state.task}
+                        onChange={(e) => setState(prev => ({ ...prev, task: e.target.value }))}
+                        placeholder="Enter what you want to automate..."
+                        disabled={state.isRunning}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                    />
+                </div>
+
+                <div>
+                    {!state.isRunning ? (
+                        <button
+                            onClick={handleStartTask}
+                            disabled={state.status === 'running' || !state.task.trim()}
+                            className="w-full px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {state.status === 'running' ? 'Running...' : 'Start Automation'}
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleStopTask}
+                            disabled={state.status === 'completed'}
+                            className="w-full px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {state.status === 'completed' ? 'Completed' : 'Stop Automation'}
+                        </button>
+                    )}
+                </div>
+
+                {/* Status Panel */}
+                <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                    <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                            <span className="text-gray-500 dark:text-gray-400">Status:</span>
+                            <span className="font-medium flex items-center">
+                                <span className={`inline-block w-2 h-2 rounded-full mr-2 ${getStatusColor()}`}></span>
+                                <span className="capitalize">{state.status}</span>
+                            </span>
+                        </div>
+
+                        <div className="flex justify-between">
+                            <span className="text-gray-500 dark:text-gray-400">Task ID:</span>
+                            <span className="font-mono text-xs bg-gray-100 dark:bg-gray-600 px-2 py-0.5 rounded">
+                                {state.taskId ? state.taskId.substring(0, 10) : 'None'}
+                            </span>
+                        </div>
+
+                        <div className="flex justify-between">
+                            <span className="text-gray-500 dark:text-gray-400">Iterations:</span>
+                            <span className="font-medium">{state.iterations}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+
+================================================================================
+File: src/types.ts
+================================================================================
+
+export interface FrontendDOMState {
+    url: string;
+    html: string;
+    title: string;
+    timestamp: string;
+}
+
+export interface DOMUpdate {
+    task_id: string;
+    dom_data: FrontendDOMState;
+    result: unknown[];
+}
+
+export interface Message {
+    type: string;
+    task?: string;
+    task_id?: string;
+    dom_data?: FrontendDOMState;
+    result?: unknown[];
+}
+
+export interface TaskState {
+    taskId: string | null;
+    status: 'idle' | 'running' | 'completed' | 'error';
+    task: string;
+    isRunning: boolean;
+    iterations: number;
+} 
+
+
+================================================================================
+File: src/vite-env.d.ts
+================================================================================
+
+/// <reference types="vite/client" />
+
+
