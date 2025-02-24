@@ -17,6 +17,7 @@ export interface Message {
     task_id?: string;
     dom_data?: FrontendDOMState;
     result?: unknown[];
+    iterations?: number;
 }
 
 export interface TaskState {

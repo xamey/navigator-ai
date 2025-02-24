@@ -13,6 +13,19 @@ export default function Popup() {
 
     useEffect(() => {
         console.log('Popup component mounted');
+
+        // Add message listener for iteration updates
+        const messageListener = (message: Message) => {
+            if (message.type === 'iterationUpdate') {
+                setState(prev => ({
+                    ...prev,
+                    iterations: message.iterations || prev.iterations
+                }));
+            }
+        };
+
+        chrome.runtime.onMessage.addListener(messageListener);
+
         // Load both task state and active session
         chrome.storage.local.get(['taskState', 'isMinimized', 'activeSession'], (result) => {
             console.log('Loaded from storage:', result);
@@ -39,6 +52,11 @@ export default function Popup() {
 
         // Apply glass morphism style to body
         document.body.style.background = 'transparent';
+
+        // Cleanup listener on unmount
+        return () => {
+            chrome.runtime.onMessage.removeListener(messageListener);
+        };
     }, []);
 
     // Save minimized state when it changes

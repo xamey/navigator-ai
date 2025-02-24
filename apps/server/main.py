@@ -63,7 +63,7 @@ async def update_task(update: DOMUpdate):
         print(f"Title: {update.dom_data.title}")
         print(f"Timestamp: {update.dom_data.timestamp}")
 
-        print(update.dom_data)
+        # print(update.dom_data)
 
         # Store the HTML content in a file for debugging/analysis
         # Create a directory for storing DOM snapshots if it doesn't exist

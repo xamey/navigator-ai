@@ -5,7 +5,7 @@ console.log('Background script initializing...');
 
 const API_BASE_URL = 'http://localhost:8000';
 let monitoringInterval: NodeJS.Timeout | null = null;
-const MAX_ITERATIONS = 3;
+const MAX_ITERATIONS = 2;
 let currentIterations = 0;
 
 // Store active task session
@@ -215,7 +215,10 @@ function startMonitoring(task_id: string) {
                 });
 
                 currentIterations++;
-
+                chrome.runtime.sendMessage({
+                    type: 'iterationUpdate',
+                    iterations: currentIterations
+                });
                 // Update popup with current iterations
                 const taskState = await chrome.storage.local.get(['taskState']);
                 if (taskState.taskState) {
