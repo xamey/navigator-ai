@@ -90,66 +90,106 @@ function createExtensionContainer() {
 // Initialize draggable functionality
 function initDraggable(container: HTMLElement, dragHandle: HTMLElement) {
     let isDragging = false;
-    let currentX: number;
-    let currentY: number;
     let initialX: number;
     let initialY: number;
+    let startPositionX: number;
+    let startPositionY: number;
 
-    dragHandle.addEventListener('mousedown', dragStart, { passive: false });
-
-    function dragStart(e: MouseEvent) {
-        // Stop event propagation so the page doesn't receive this event
-        e.stopPropagation();
-        e.preventDefault();
-
-        console.log('Drag start');
-
-        // Get current position relative to the viewport
-        const rect = container.getBoundingClientRect();
-        initialX = e.clientX - rect.left;
-        initialY = e.clientY - rect.top;
-
-        isDragging = true;
-
-        document.addEventListener('mousemove', drag, { passive: false });
-        document.addEventListener('mouseup', dragEnd, { passive: false });
+    // Store position in local storage
+    function savePosition(x: number, y: number) {
+        localStorage.setItem('popupPosition', JSON.stringify({ left: x, top: y }));
     }
 
-    function drag(e: MouseEvent) {
+    function loadPosition() {
+        try {
+            const position = localStorage.getItem('popupPosition');
+            if (position) {
+                const { left, top } = JSON.parse(position);
+                container.style.left = left + 'px';
+                container.style.top = top + 'px';
+                container.style.right = 'auto';
+                container.style.bottom = 'auto';
+            }
+        } catch (e) {
+            console.error('Error loading position:', e);
+        }
+    }
+
+    // Set initial position from storage or default
+    loadPosition();
+
+    // Handle mousedown event to start drag
+    dragHandle.addEventListener('mousedown', (e) => {
+        // Only handle left mouse button
+        if (e.button !== 0) return;
+
+        // Check if the element has the drag-handle class
+        // This ensures dragging only works when minimized
+        if (!dragHandle.classList.contains('drag-handle')) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Get current container position
+        const style = window.getComputedStyle(container);
+        startPositionX = parseInt(style.left, 10) || 0;
+        startPositionY = parseInt(style.top, 10) || 0;
+
+        // Calculate offset from mouse to container corner
+        initialX = e.clientX - startPositionX;
+        initialY = e.clientY - startPositionY;
+
+        isDragging = true;
+        container.classList.add('dragging');
+
+        // Add document-wide event listeners
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        document.addEventListener('mouseleave', onMouseUp);
+    });
+
+    function onMouseMove(e: MouseEvent) {
         if (!isDragging) return;
 
-        // Stop event propagation to prevent page interaction issues
-        e.stopPropagation();
         e.preventDefault();
+        e.stopPropagation();
 
         // Calculate new position
-        currentX = e.clientX - initialX;
-        currentY = e.clientY - initialY;
+        const x = e.clientX - initialX;
+        const y = e.clientY - initialY;
 
         // Constrain to viewport
         const maxX = window.innerWidth - container.offsetWidth;
         const maxY = window.innerHeight - container.offsetHeight;
+        const newX = Math.max(0, Math.min(x, maxX));
+        const newY = Math.max(0, Math.min(y, maxY));
 
-        currentX = Math.max(0, Math.min(currentX, maxX));
-        currentY = Math.max(0, Math.min(currentY, maxY));
-
-        // Apply new position
-        container.style.left = `${currentX}px`;
-        container.style.top = `${currentY}px`;
+        // Set the new position directly
+        container.style.left = `${newX}px`;
+        container.style.top = `${newY}px`;
         container.style.right = 'auto';
         container.style.bottom = 'auto';
     }
 
-    function dragEnd(e: MouseEvent) {
-        // Stop event propagation
+    function onMouseUp(e: MouseEvent) {
+        if (!isDragging) return;
+
+        e.preventDefault();
         e.stopPropagation();
 
-        initialX = currentX;
-        initialY = currentY;
         isDragging = false;
+        container.classList.remove('dragging');
 
-        document.removeEventListener('mousemove', drag);
-        document.removeEventListener('mouseup', dragEnd);
+        // Save the final position
+        const style = window.getComputedStyle(container);
+        const finalX = parseInt(style.left, 10);
+        const finalY = parseInt(style.top, 10);
+        savePosition(finalX, finalY);
+
+        // Clean up event listeners
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.removeEventListener('mouseleave', onMouseUp);
     }
 }
 

@@ -19,6 +19,16 @@
   border-radius: 8px;
   overflow: visible;
   box-shadow: none;
+  will-change: transform, left, top;
+  transform: translate3d(0, 0, 0);
+  transition: box-shadow 0.3s ease;
+}
+
+/* Add strong visual feedback when dragging */
+.browser-automation-container.dragging {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  transition: none;
+  cursor: grabbing;
 }
 
 /* Minimized popup styling */
@@ -62,10 +72,44 @@
   background-color: transparent !important;
 }
 
-/* Drag handle styling */
+/* Enhance drag handle styling for better user experience */
 .drag-handle {
-  cursor: move;
+  cursor: grab;
   user-select: none;
+  position: relative;
+  touch-action: none;
+}
+
+/* Show an active state when the handle is being dragged */
+.drag-handle:active,
+.dragging .drag-handle {
+  cursor: grabbing;
+}
+
+/* Enhance the hover indicator for minimized state only */
+.drag-handle:hover::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(100, 149, 237, 0.8);
+  border-radius: 3px 3px 0 0;
+}
+
+/* Add these new styles for minimized state */
+.fixed.bottom-4.right-4 .drag-handle {
+  cursor: grab;
+}
+
+.fixed.bottom-4.right-4 .drag-handle:hover {
+  cursor: grab;
+  box-shadow: 0 0 0 2px rgba(100, 149, 237, 0.5);
+}
+
+.fixed.bottom-4.right-4 .drag-handle:active {
+  cursor: grabbing;
 }
 
 /* Fix for popup.tsx container */
