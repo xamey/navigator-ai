@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { DOMUpdate, Message } from './types';
 
+console.log('Background script initializing...');
+
 const API_BASE_URL = 'http://localhost:8000';
 let monitoringInterval: NodeJS.Timeout | null = null;
 const MAX_ITERATIONS = 3;
@@ -14,32 +16,89 @@ let activeSession: {
 
 // Initialize session from storage on extension load
 chrome.storage.local.get(['activeSession'], (result) => {
+    console.log('Loaded active session from storage:', result.activeSession);
     if (result.activeSession) {
         activeSession = result.activeSession;
     }
 });
 
+// Helper function to check if a URL is accessible by content scripts
+function isValidUrl(url: string): boolean {
+    return typeof url === 'string' &&
+        !url.startsWith('chrome://') &&
+        !url.startsWith('chrome-extension://') &&
+        !url.startsWith('chrome-search://') &&
+        !url.startsWith('about:') &&
+        !url.startsWith('edge://') &&
+        !url.startsWith('brave://');
+}
+
+// Handle extension icon click
 chrome.action.onClicked.addListener((tab) => {
-    // Send a message to toggle the UI
-    chrome.tabs.sendMessage(tab.id!, { action: "toggleUI" });
+    console.log('Extension icon clicked, toggling UI in tab:', tab.id);
+    if (tab.id && tab.url && isValidUrl(tab.url)) {
+        chrome.tabs.sendMessage(tab.id, { action: "toggleUI" })
+            .catch(err => {
+                console.error('Error sending toggleUI message:', err);
+                // Try injecting content script if it's not loaded
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id! },
+                    files: ['content.js']
+                })
+                    .then(() => {
+                        // Now try sending the message again
+                        chrome.tabs.sendMessage(tab.id!, { action: "toggleUI" });
+                    })
+                    .catch(injectErr => {
+                        console.error('Failed to inject content script:', injectErr);
+                    });
+            });
+    } else {
+        console.log('Cannot toggle UI on this page (likely a chrome:// URL)');
+    }
 });
 
-chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
+    console.log('Background received message:', message.type, sender?.tab?.id);
+
     try {
         if (message.type === 'startTask') {
             handleStartTask(message, sendResponse);
+            return true; // Keep channel open for async response
         } else if (message.type === 'startMonitoring') {
             startMonitoring(message.task_id!);
+            sendResponse({ success: true });
         } else if (message.type === 'stopMonitoring') {
             stopMonitoring();
+            sendResponse({ success: true });
         } else if (message.type === 'dom_update') {
             handleDOMUpdate(message);
+            sendResponse({ success: true });
+        } else if (message.type === 'toggleUI') {
+            // Find the active tab and send toggle message
+            chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+                if (tabs.length > 0 && tabs[0].id && tabs[0].url && isValidUrl(tabs[0].url)) {
+                    chrome.tabs.sendMessage(tabs[0].id, { action: "toggleUI" })
+                        .then(() => {
+                            sendResponse({ success: true });
+                        })
+                        .catch(err => {
+                            console.error('Error sending toggleUI:', err);
+                            sendResponse({ success: false, error: err.message });
+                        });
+                } else {
+                    console.log('Cannot toggle UI on this page (likely a chrome:// URL)');
+                    sendResponse({ success: false, error: 'Cannot toggle UI on this page' });
+                }
+            });
+            return true; // Keep channel open for async response
         }
     } catch (error) {
         console.error('Error in background script:', error);
-        sendResponse({ error: 'Background script error' });
+        sendResponse({ success: false, error: 'Background script error' });
     }
-    return true;
+
+    return true; // Keep channel open for async response
 });
 
 async function handleDOMUpdate(message: Message) {
@@ -55,6 +114,7 @@ async function handleDOMUpdate(message: Message) {
     };
 
     try {
+        console.log('Sending DOM update to API:', updateData.task_id);
         const response = await fetch(`${API_BASE_URL}/tasks/update`, {
             method: 'POST',
             headers: {
@@ -82,13 +142,17 @@ async function handleDOMUpdate(message: Message) {
 
 async function handleStartTask(message: Message, sendResponse: (response?: any) => void) {
     try {
+        console.log('Starting task:', message.task);
+
         // If there's an active session, use that task ID
         if (activeSession?.taskId && activeSession.status === 'active') {
+            console.log('Using existing active session:', activeSession.taskId);
             sendResponse({ task_id: activeSession.taskId });
             return;
         }
 
         // Otherwise create a new task
+        console.log('Creating new task with server');
         const response = await fetch(`${API_BASE_URL}/tasks/create`, {
             method: 'POST',
             headers: {
@@ -98,6 +162,7 @@ async function handleStartTask(message: Message, sendResponse: (response?: any) 
         });
 
         const data = await response.json();
+        console.log('Task created successfully:', data.task_id);
 
         // Store the new session
         activeSession = {
@@ -116,6 +181,8 @@ async function handleStartTask(message: Message, sendResponse: (response?: any) 
 }
 
 function startMonitoring(task_id: string) {
+    console.log('Starting monitoring for task:', task_id);
+
     if (monitoringInterval) {
         clearInterval(monitoringInterval);
     }
@@ -123,6 +190,7 @@ function startMonitoring(task_id: string) {
     currentIterations = 0;
     monitoringInterval = setInterval(async () => {
         if (currentIterations >= MAX_ITERATIONS) {
+            console.log('Reached max iterations, stopping monitoring');
             stopMonitoring();
             if (activeSession) {
                 activeSession.status = 'completed';
@@ -132,8 +200,10 @@ function startMonitoring(task_id: string) {
         }
 
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tabs[0]?.id) {
+        if (tabs[0]?.id && tabs[0]?.url && isValidUrl(tabs[0].url)) {
             try {
+                console.log('Processing DOM for iteration:', currentIterations + 1);
+
                 await chrome.scripting.executeScript({
                     target: { tabId: tabs[0].id },
                     files: ['content.js']
@@ -163,13 +233,16 @@ function startMonitoring(task_id: string) {
                     await chrome.storage.local.set({ activeSession });
                 }
             }
+        } else {
+            console.log('Current tab is not accessible to content scripts (chrome:// or similar URL). Skipping this iteration.');
         }
     }, 2000);
 }
 
 function stopMonitoring() {
+    console.log('Stopping monitoring');
     if (monitoringInterval) {
         clearInterval(monitoringInterval);
         monitoringInterval = null;
     }
-} 
+}

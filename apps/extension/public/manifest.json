@@ -16,8 +16,15 @@
       "css": ["assets/popup.css"]
     }
   ],
-  "permissions": ["activeTab", "scripting", "storage"],
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html", "assets/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
