@@ -70,7 +70,12 @@
 
 /* Fix for popup.tsx container */
 .w-96.bg-slate-800 {
-  background-color: rgba(30, 41, 59, 0.9) !important; /* Slightly transparent slate-800 */
-  backdrop-filter: blur(8px);
+  background-color: rgba(30, 41, 59, 0.5) !important; /* Much more transparent */
+  backdrop-filter: blur(5px);
   width: 400px !important;
+}
+
+/* Add transparent background to any containers */
+.min-w-96 {
+  background-color: transparent !important;
 }

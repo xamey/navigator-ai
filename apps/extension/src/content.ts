@@ -42,14 +42,15 @@ function createExtensionContainer() {
             width: 400px;
             height: auto;
             max-height: 550px;
+            background-color: transparent !important;
         }
         iframe {
             width: 100%;
             height: 550px;
             border: none;
             border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-            background-color: transparent;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            background-color: transparent !important;
         }
         .drag-handle {
             position: absolute;
@@ -65,6 +66,7 @@ function createExtensionContainer() {
     // Create iframe
     const iframe = document.createElement('iframe');
     iframe.src = chrome.runtime.getURL('popup.html');
+    iframe.style.backgroundColor = 'transparent';
 
     // Create drag handle
     const dragHandle = document.createElement('div');
