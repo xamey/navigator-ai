@@ -66,3 +66,31 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+.popup {
+    min-width: 300px;
+    padding: 20px;
+}
+
+.popup input {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 8px;
+}
+
+.popup button {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+
+.popup button.stop {
+    background-color: #ff4444;
+    color: white;
+    border: none;
+}
+
+.popup p {
+    margin: 5px 0;
+}

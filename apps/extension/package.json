@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.popup.config.ts",
-    "build": "tsx build.ts",
-    "build:chrome": "cross-env TARGET=chrome tsx build.ts",
-    "build:firefox": "cross-env TARGET=firefox tsx build.ts"
+    "build": "rimraf dist && tsx build.ts",
+    "build:chrome": "rimraf dist && cross-env TARGET=chrome tsx build.ts",
+    "build:firefox": "rimraf dist && cross-env TARGET=firefox tsx build.ts"
   },
   "dependencies": {
     "react": "^19.0.0",

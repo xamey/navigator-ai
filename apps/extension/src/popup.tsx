@@ -5,46 +5,72 @@ export default function Popup() {
     const [state, setState] = useState<TaskState>({
         taskId: null,
         status: 'idle',
-        task: ''
+        task: '',
+        isRunning: false,
+        iterations: 0
     });
 
     useEffect(() => {
-        try {
-            // Load taskId from storage when component mounts
-            chrome.storage.local.get(['taskId'], (result) => {
-                if (result.taskId) {
-                    setState(prev => ({ ...prev, taskId: result.taskId }));
-                }
-            });
-        } catch (error) {
-            console.error('Error loading taskId:', error);
-        }
+        // Load both task state and active session
+        chrome.storage.local.get(['taskState', 'activeSession'], (result) => {
+            if (result.taskState) {
+                setState(result.taskState);
+            }
+
+            // If there's an active session, update the state
+            if (result.activeSession?.taskId && result.activeSession.status === 'active') {
+                setState(prev => ({
+                    ...prev,
+                    taskId: result.activeSession.taskId,
+                    status: 'running',
+                    isRunning: true
+                }));
+            }
+        });
     }, []);
 
     const handleStartTask = async () => {
         try {
-            setState(prev => ({ ...prev, status: 'running' }));
-
             const message: Message = {
                 type: 'startTask',
                 task: state.task
             };
 
-            // Send message to background script
             const response = await chrome.runtime.sendMessage(message);
 
             if (response?.task_id) {
-                // Store taskId in chrome storage
-                await chrome.storage.local.set({ taskId: response.task_id });
-                setState(prev => ({
-                    ...prev,
+                const newState: TaskState = {
+                    ...state,
                     taskId: response.task_id,
-                    status: 'completed'
-                }));
+                    status: 'running',
+                    isRunning: true,
+                    iterations: 0
+                };
+
+                await chrome.storage.local.set({ taskState: newState });
+                setState(newState);
+
+                // Start the monitoring loop
+                chrome.runtime.sendMessage({ type: 'startMonitoring', task_id: response.task_id });
             }
         } catch (error) {
             console.error('Error starting task:', error);
             setState(prev => ({ ...prev, status: 'error' }));
+        }
+    };
+
+    const handleStopTask = async () => {
+        try {
+            chrome.runtime.sendMessage({ type: 'stopMonitoring' });
+            const newState: TaskState = {
+                ...state,
+                status: 'idle',
+                isRunning: false
+            };
+            await chrome.storage.local.set({ taskState: newState });
+            setState(newState);
+        } catch (error) {
+            console.error('Error stopping task:', error);
         }
     };
 
@@ -58,16 +84,26 @@ export default function Popup() {
                     onChange={(e) => setState(prev => ({ ...prev, task: e.target.value }))}
                     placeholder="Enter task description"
                 />
-                <button
-                    onClick={handleStartTask}
-                    disabled={state.status === 'running'}
-                >
-                    Start Task
-                </button>
+                {!state.isRunning ? (
+                    <button
+                        onClick={handleStartTask}
+                        disabled={state.status === 'running'}
+                    >
+                        Start Task
+                    </button>
+                ) : (
+                    <button
+                        onClick={handleStopTask}
+                        className="stop"
+                    >
+                        Stop Tasksss
+                    </button>
+                )}
             </div>
             <div>
                 <p>Task ID: {state.taskId || 'None'}</p>
                 <p>Status: {state.status}</p>
+                <p>Iterations: {state.iterations}</p>
             </div>
         </div>
     );

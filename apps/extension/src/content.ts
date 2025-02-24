@@ -3,7 +3,12 @@ import { FrontendDOMState, Message } from './types';
 function processDOM(task_id: string): FrontendDOMState {
     try {
         const domData: FrontendDOMState = {
-            url: window.location.href
+            url: window.location.href,
+            // Get the complete HTML content
+            html: document.documentElement.outerHTML,
+            // Additional metadata about the page
+            title: document.title,
+            timestamp: new Date().toISOString()
         };
 
         // Send data back to background script
@@ -21,17 +26,9 @@ function processDOM(task_id: string): FrontendDOMState {
     }
 }
 
-// Listen for messages from background script
-chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
-    try {
-        if (message.type === 'processDOM' && message.task_id) {
-            const domData = processDOM(message.task_id);
-            console.log('DOM processed:', domData);
-            sendResponse({ success: true });
-        }
-    } catch (error) {
-        console.error('Error in content script:', error);
-        sendResponse({ error: 'Content script error' });
+// Listen for messages from the background script
+chrome.runtime.onMessage.addListener((message: Message) => {
+    if (message.type === 'processDOM' && message.task_id) {
+        processDOM(message.task_id);
     }
-    return true;
 }); 
