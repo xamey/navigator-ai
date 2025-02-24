@@ -49,8 +49,10 @@ function createExtensionContainer() {
             height: 550px;
             border: none;
             border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            box-shadow: none !important;
             background-color: transparent !important;
+            color-scheme: gjfdk fjskl;
+            opacity: 0.98;
         }
         .drag-handle {
             position: absolute;
@@ -67,6 +69,10 @@ function createExtensionContainer() {
     const iframe = document.createElement('iframe');
     iframe.src = chrome.runtime.getURL('popup.html');
     iframe.style.backgroundColor = 'transparent';
+    iframe.style.backdropFilter = 'none';
+    // iframe.style.webkitBackdropFilter = 'none';
+    iframe.style.opacity = '0.98';
+    iframe.allow = 'autoplay';
 
     // Create drag handle
     const dragHandle = document.createElement('div');

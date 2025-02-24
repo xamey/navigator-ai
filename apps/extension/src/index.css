@@ -123,3 +123,43 @@
 .min-w-96 {
   background-color: transparent !important;
 }
+
+/* Force transparent backgrounds in light mode */
+@media (prefers-color-scheme: light) {
+  /* Target the container and all its children */
+  #browser-automation-extension,
+  #browser-automation-extension * {
+    background-color: transparent !important;
+  }
+  
+  /* Fix common background classes */
+  .bg-white, 
+  .bg-slate-800, 
+  .bg-slate-700,
+  .bg-gray-50,
+  .bg-gray-100,
+  .bg-gray-200 {
+    background-color: transparent !important;
+  }
+  
+  /* Handle glass backgrounds specially in light mode */
+  .bg-slate-800\/90,
+  .bg-slate-700\/90 {
+    background-color: rgba(51, 65, 85, 0.75) !important; /* Darker in light mode */
+    backdrop-filter: blur(10px);
+  }
+}
+
+/* Improve container visibility with better contrast */
+.min-w-96 .h-full.w-full.flex.flex-col {
+  background-color: rgba(30, 41, 59, 0.9) !important; 
+  backdrop-filter: blur(10px);
+}
+
+/* Remove any box-shadow that might show in light mode */
+iframe, 
+.popup-container,
+.browser-automation-container,
+.extension-wrapper {
+  box-shadow: none !important;
+}
