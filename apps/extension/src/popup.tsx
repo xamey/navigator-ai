@@ -7,6 +7,7 @@ export default function Popup() {
         status: 'idle',
         task: '',
         isRunning: false,
+        isPaused: false,
         iterations: 0
     });
     const [isMinimized, setIsMinimized] = useState(false);
@@ -36,6 +37,12 @@ export default function Popup() {
                         isRunning: false
                     }
                 }).catch(err => console.error('Error saving completed state:', err));
+            } else if (message.type === 'pauseStateChanged') {
+                setState(prev => ({
+                    ...prev,
+                    isPaused: message.isPaused || false,
+                    status: message.isPaused ? 'paused' : 'running'
+                }));
             }
         };
 
@@ -60,8 +67,10 @@ export default function Popup() {
                     ...prev,
                     taskId: result.activeSession.taskId,
                     status: result.activeSession.status === 'completed' ? 'completed' :
-                        result.activeSession.status === 'error' ? 'error' : 'running',
-                    isRunning: result.activeSession.status === 'active'
+                        result.activeSession.status === 'error' ? 'error' :
+                            result.activeSession.isPaused ? 'paused' : 'running',
+                    isRunning: result.activeSession.status === 'active',
+                    isPaused: result.activeSession.isPaused || false
                 }));
             }
         });
@@ -124,6 +133,7 @@ export default function Popup() {
                     taskId: response.task_id,
                     status: 'running',
                     isRunning: true,
+                    isPaused: false,
                     iterations: 0
                 };
 
@@ -147,7 +157,8 @@ export default function Popup() {
             const newState: TaskState = {
                 ...state,
                 status: 'idle',
-                isRunning: false
+                isRunning: false,
+                isPaused: false
             };
             await chrome.storage.local.set({ taskState: newState });
             setState(newState);
@@ -156,9 +167,39 @@ export default function Popup() {
         }
     };
 
-    // const handleToggleUI = () => {
-    //     chrome.runtime.sendMessage({ type: 'toggleUI' });
-    // };
+    // Add pause functionality
+    const handlePauseTask = async () => {
+        try {
+            console.log('Pausing task...');
+            const newState: TaskState = {
+                ...state,
+                status: 'paused',
+                isPaused: true
+            };
+            await chrome.storage.local.set({ taskState: newState });
+            setState(newState);
+            chrome.runtime.sendMessage({ type: 'pauseMonitoring' });
+        } catch (error) {
+            console.error('Error pausing task:', error);
+        }
+    };
+
+    // Add resume functionality
+    const handleResumeTask = async () => {
+        try {
+            console.log('Resuming task...');
+            const newState: TaskState = {
+                ...state,
+                status: 'running',
+                isPaused: false
+            };
+            await chrome.storage.local.set({ taskState: newState });
+            setState(newState);
+            chrome.runtime.sendMessage({ type: 'resumeMonitoring' });
+        } catch (error) {
+            console.error('Error resuming task:', error);
+        }
+    };
 
     // Status badge color
     const getStatusColor = () => {
@@ -167,6 +208,7 @@ export default function Popup() {
             case 'error': return 'bg-red-500';
             case 'idle': return 'bg-yellow-500';
             case 'completed': return 'bg-blue-500';
+            case 'paused': return 'bg-orange-500';
             default: return 'bg-gray-400';
         }
     };
@@ -178,6 +220,7 @@ export default function Popup() {
             case 'error': return 'Error';
             case 'idle': return 'Idle';
             case 'completed': return 'Completed';
+            case 'paused': return 'Paused';
             default: return 'Idle';
         }
     };
@@ -200,8 +243,11 @@ export default function Popup() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                     </svg>
                 </button>
-                {state.isRunning && (
+                {state.isRunning && !state.isPaused && (
                     <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-green-500 animate-pulse border-2 border-white"></div>
+                )}
+                {state.isRunning && state.isPaused && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-orange-500 border-2 border-white"></div>
                 )}
             </div>
         );
@@ -257,12 +303,44 @@ export default function Popup() {
                                 Start Automation
                             </button>
                         ) : (
-                            <button
-                                onClick={handleStopTask}
-                                className="w-full px-4 py-3 text-white bg-red-600/90 hover:bg-red-700/90 rounded-md shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
-                            >
-                                Stop Automation
-                            </button>
+                            <div className="flex gap-2">
+                                {!state.isPaused ? (
+                                    <button
+                                        onClick={handlePauseTask}
+                                        className="flex-1 px-4 py-3 text-white bg-orange-600/90 hover:bg-orange-700/90 rounded-md shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors"
+                                    >
+                                        <div className="flex items-center justify-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            Pause
+                                        </div>
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={handleResumeTask}
+                                        className="flex-1 px-4 py-3 text-white bg-green-600/90 hover:bg-green-700/90 rounded-md shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+                                    >
+                                        <div className="flex items-center justify-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                            </svg>
+                                            Resume
+                                        </div>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={handleStopTask}
+                                    className="flex-1 px-4 py-3 text-white bg-red-600/90 hover:bg-red-700/90 rounded-md shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+                                >
+                                    <div className="flex items-center justify-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" />
+                                        </svg>
+                                        Stop
+                                    </div>
+                                </button>
+                            </div>
                         )}
                     </div>
 
@@ -272,7 +350,7 @@ export default function Popup() {
                             <div className="flex justify-between items-center">
                                 <span className="text-slate-400">Status:</span>
                                 <div className="flex items-center space-x-2">
-                                    <span className={`inline-block w-3 h-3 rounded-full ${getStatusColor()}`}></span>
+                                    <span className={`inline-block w-3 h-3 rounded-full ${getStatusColor()} ${state.isPaused ? '' : state.isRunning ? 'animate-pulse' : ''}`}></span>
                                     <span className="font-medium text-white">{getStatusText()}</span>
                                 </div>
                             </div>
@@ -288,9 +366,14 @@ export default function Popup() {
                                 <span className="text-slate-400">Iterations:</span>
                                 <div className="flex items-center">
                                     <span className="font-medium text-white">{state.iterations}</span>
-                                    {state.isRunning && state.iterations > 0 && (
+                                    {state.isRunning && state.iterations > 0 && !state.isPaused && (
                                         <span className="ml-2 text-xs px-2 py-0.5 bg-blue-500 rounded-full text-white">
                                             Running
+                                        </span>
+                                    )}
+                                    {state.isRunning && state.isPaused && (
+                                        <span className="ml-2 text-xs px-2 py-0.5 bg-orange-500 rounded-full text-white">
+                                            Paused
                                         </span>
                                     )}
                                 </div>

@@ -7,11 +7,14 @@ const API_BASE_URL = 'http://localhost:8000';
 let monitoringInterval: NodeJS.Timeout | null = null;
 const MAX_ITERATIONS = 2;
 let currentIterations = 0;
+let isPaused = false;
 
 // Store active task session
 let activeSession: {
     taskId: string;
-    status: 'active' | 'completed' | 'error';
+    status: 'active' | 'completed' | 'error' | 'paused';
+    isPaused?: boolean;
+    isRunning?: boolean;
 } | null = null;
 
 // Initialize session from storage on extension load
@@ -19,6 +22,7 @@ chrome.storage.local.get(['activeSession'], (result) => {
     console.log('Loaded active session from storage:', result.activeSession);
     if (result.activeSession) {
         activeSession = result.activeSession;
+        isPaused = result.activeSession.isPaused || false;
     }
 });
 
@@ -92,6 +96,12 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
                 }
             });
             return true; // Keep channel open for async response
+        } else if (message.type === 'pauseMonitoring') {
+            pauseMonitoring();
+            sendResponse({ success: true });
+        } else if (message.type === 'resumeMonitoring') {
+            resumeMonitoring();
+            sendResponse({ success: true });
         }
     } catch (error) {
         console.error('Error in background script:', error);
@@ -167,7 +177,8 @@ async function handleStartTask(message: Message, sendResponse: (response?: any) 
         // Store the new session
         activeSession = {
             taskId: data.task_id,
-            status: 'active'
+            status: 'active',
+            isPaused: false
         };
 
         // Persist session
@@ -188,7 +199,14 @@ function startMonitoring(task_id: string) {
     }
 
     currentIterations = 0;
+    isPaused = false;
+
     monitoringInterval = setInterval(async () => {
+        if (isPaused) {
+            console.log('Monitoring is paused, skipping iteration');
+            return;
+        }
+
         if (currentIterations >= MAX_ITERATIONS) {
             console.log('Reached max iterations, stopping monitoring');
             stopMonitoring();
@@ -278,4 +296,34 @@ function stopMonitoring() {
         clearInterval(monitoringInterval);
         monitoringInterval = null;
     }
+}
+
+function pauseMonitoring() {
+    console.log('Pausing automation monitoring');
+    isPaused = true;
+
+    if (activeSession) {
+        activeSession.isPaused = true;
+        chrome.storage.local.set({ activeSession });
+    }
+
+    chrome.runtime.sendMessage({
+        type: 'pauseStateChanged',
+        isPaused: true
+    });
+}
+
+function resumeMonitoring() {
+    console.log('Resuming automation monitoring');
+    isPaused = false;
+
+    if (activeSession) {
+        activeSession.isPaused = false;
+        chrome.storage.local.set({ activeSession });
+    }
+
+    chrome.runtime.sendMessage({
+        type: 'pauseStateChanged',
+        isPaused: false
+    });
 }

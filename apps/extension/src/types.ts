@@ -18,12 +18,14 @@ export interface Message {
     dom_data?: FrontendDOMState;
     result?: unknown[];
     iterations?: number;
+    isPaused?: boolean;
 }
 
 export interface TaskState {
     taskId: string | null;
-    status: 'idle' | 'running' | 'completed' | 'error';
+    status: 'idle' | 'running' | 'completed' | 'error' | 'paused';
     task: string;
     isRunning: boolean;
     iterations: number;
-} 
+    isPaused: boolean;
+}
