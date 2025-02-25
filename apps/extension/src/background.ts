@@ -195,6 +195,10 @@ function startMonitoring(task_id: string) {
             if (activeSession) {
                 activeSession.status = 'completed';
                 await chrome.storage.local.set({ activeSession });
+                chrome.runtime.sendMessage({
+                    type: 'stopMonitoring',
+                    task_id
+                });
             }
             return;
         }
@@ -204,15 +208,28 @@ function startMonitoring(task_id: string) {
             try {
                 console.log('Processing DOM for iteration:', currentIterations + 1);
 
-                await chrome.scripting.executeScript({
-                    target: { tabId: tabs[0].id },
-                    files: ['content.js']
-                });
+                // Try sending message directly first, only inject if needed
+                try {
+                    // Send message to process DOM
+                    await chrome.tabs.sendMessage(tabs[0].id, {
+                        type: 'processDOM',
+                        task_id
+                    });
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                } catch (msgError) {
+                    // Content script not loaded yet, inject it first
+                    console.log('Content script not loaded, injecting it...');
+                    await chrome.scripting.executeScript({
+                        target: { tabId: tabs[0].id },
+                        files: ['content.js']
+                    });
 
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    type: 'processDOM',
-                    task_id
-                });
+                    // Now send the message
+                    await chrome.tabs.sendMessage(tabs[0].id, {
+                        type: 'processDOM',
+                        task_id
+                    });
+                }
 
                 currentIterations++;
                 chrome.runtime.sendMessage({
@@ -237,7 +254,7 @@ function startMonitoring(task_id: string) {
                 }
             }
         } else {
-            console.log('Current tab is not accessible to content scripts (chrome:// or similar URL). Skipping this iteration.');
+            console.log('Cannot process DOM on this page (likely a chrome:// URL). Skipping this iteration.');
         }
     }, 2000);
 }
