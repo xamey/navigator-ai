@@ -21,6 +21,21 @@ export default function Popup() {
                     ...prev,
                     iterations: message.iterations || prev.iterations
                 }));
+            } else if (message.type === 'stopMonitoring') {
+                setState(prev => ({
+                    ...prev,
+                    status: 'completed',
+                    isRunning: false
+                }));
+
+                // Update storage to persist the completed state
+                chrome.storage.local.set({
+                    taskState: {
+                        ...state,
+                        status: 'completed',
+                        isRunning: false
+                    }
+                }).catch(err => console.error('Error saving completed state:', err));
             }
         };
 
@@ -40,12 +55,13 @@ export default function Popup() {
             }
 
             // If there's an active session, update the state
-            if (result.activeSession?.taskId && result.activeSession.status === 'active') {
+            if (result.activeSession?.taskId) {
                 setState(prev => ({
                     ...prev,
                     taskId: result.activeSession.taskId,
-                    status: 'running',
-                    isRunning: true
+                    status: result.activeSession.status === 'completed' ? 'completed' :
+                        result.activeSession.status === 'error' ? 'error' : 'running',
+                    isRunning: result.activeSession.status === 'active'
                 }));
             }
         });

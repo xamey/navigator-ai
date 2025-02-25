@@ -195,6 +195,19 @@ function startMonitoring(task_id: string) {
             if (activeSession) {
                 activeSession.status = 'completed';
                 await chrome.storage.local.set({ activeSession });
+
+                // Also update taskState to ensure popup display is correct
+                const taskState = await chrome.storage.local.get(['taskState']);
+                if (taskState.taskState) {
+                    await chrome.storage.local.set({
+                        taskState: {
+                            ...taskState.taskState,
+                            status: 'completed',
+                            isRunning: false
+                        }
+                    });
+                }
+
                 chrome.runtime.sendMessage({
                     type: 'stopMonitoring',
                     task_id
