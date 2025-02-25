@@ -30,6 +30,7 @@ class DOMUpdate(BaseModel):
     task_id: str
     dom_data: DOMData
     result: List[Dict] = []
+    iterations: int = 0
 
 
 class TaskCreate(BaseModel):
@@ -62,7 +63,7 @@ async def update_task(update: DOMUpdate):
         print(f"URL: {update.dom_data.url}")
         print(f"Title: {update.dom_data.title}")
         print(f"Timestamp: {update.dom_data.timestamp}")
-
+        print(f"Iterations: {update.iterations}")
         # print(update.dom_data)
 
         # Store the HTML content in a file for debugging/analysis

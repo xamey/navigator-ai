@@ -9,6 +9,7 @@ export interface DOMUpdate {
     task_id: string;
     dom_data: FrontendDOMState;
     result: unknown[];
+    iterations: number;
 }
 
 export interface Message {

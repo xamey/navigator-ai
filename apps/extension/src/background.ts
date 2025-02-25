@@ -120,7 +120,8 @@ async function handleDOMUpdate(message: Message) {
     const updateData: DOMUpdate = {
         task_id: message.task_id,
         dom_data: message.dom_data,
-        result: Array.isArray(message.result) ? message.result : []  // Ensure result is always an array
+        result: Array.isArray(message.result) ? message.result : [],
+        iterations: currentIterations
     };
 
     try {
