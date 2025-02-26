@@ -1,4 +1,4 @@
-import { parseDOM } from '@navigator-ai/core';
+import { DOMElementNode, DOMHashMap, DOMNode, parseDOM } from '@navigator-ai/core';
 import { FrontendDOMState, Message } from './types';
 
 console.log('Content script loaded');
@@ -217,6 +217,9 @@ function processDOM(task_id: string): FrontendDOMState {
             structure: domStructure
         };
 
+        console.log('Highlighting interactive elements');
+        highlighInteractiveElements(domStructure);
+
         console.log('Sending DOM update to background, structure size:',
             JSON.stringify(domData.structure).length, 'bytes');
 
@@ -274,3 +277,42 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
 // Initialize on content script load
 console.log('Creating UI container on content script load');
 createExtensionContainer();
+
+function highlighInteractiveElements(domStructure: DOMHashMap) {
+    const interactiveElements = Object.values(domStructure).filter((node) => {
+        if (!node.isVisible) {
+            return false;
+        }
+        if (!('type' in node)) {
+            const element = node as DOMElementNode;
+            return element.isInteractive;
+        }
+        return false;
+    });
+
+    // highlight interactive elements by adding style and color to the dom by accessing element using xpath
+    interactiveElements.forEach((element: DOMNode, index: number) => {
+        const xpath = (element as DOMElementNode).xpath;
+        const highlightedElement = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue as HTMLElement;
+        if (highlightedElement && highlightedElement instanceof HTMLElement) {
+            highlightedElement.style.border = `2px solid ${colors[index % colors.length]}`;
+        } else {
+            console.error('highlightedElement is not an HTMLElement:', highlightedElement);
+        }
+    });
+}
+
+const colors = [
+    "#FF0000",
+    "#00FF00",
+    "#0000FF",
+    "#FFA500",
+    "#800080",
+    "#008080",
+    "#FF69B4",
+    "#4B0082",
+    "#FF4500",
+    "#2E8B57",
+    "#DC143C",
+    "#4682B4",
+];

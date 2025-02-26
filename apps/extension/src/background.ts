@@ -127,9 +127,7 @@ async function handleDOMUpdate(message: Message) {
             dom_data: message.dom_data,
             result: Array.isArray(message.result) ? message.result : [],
             iterations: currentIterations,
-            structure: message.dom_data.structure ?? {
-                lol: 'lol'
-            } // Use the pre-parsed structure
+            structure: message.dom_data.structure ?? {}
         };
 
         console.log('Sending DOM update to API:', updateData.task_id);

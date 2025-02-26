@@ -1,9 +1,11 @@
+import { DOMHashMap } from "@navigator-ai/core";
+
 export interface FrontendDOMState {
     url: string;
     html: string;
     title: string;
     timestamp: string;
-    structure?: object;
+    structure?: DOMHashMap;
 }
 
 export interface DOMUpdate {
@@ -11,7 +13,7 @@ export interface DOMUpdate {
     dom_data: FrontendDOMState;
     result: unknown[];
     iterations: number;
-    structure: object;
+    structure: DOMHashMap;
 }
 
 export interface Message {
