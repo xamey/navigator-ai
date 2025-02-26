@@ -10,6 +10,7 @@
     "build:firefox": "rimraf dist && cross-env TARGET=firefox tsx build.ts"
   },
   "dependencies": {
+    "@navigator-ai/core": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

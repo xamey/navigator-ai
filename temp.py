@@ -23,7 +23,9 @@ def write_extension_code_to_file(extension_dir, output_file):
                 valid_extensions = ['.ts', '.tsx', '.js',
                                     '.jsx', '.html', '.css', '.json']
 
-                if file_ext in valid_extensions:
+                invalid_files = ['package-lock.json']
+
+                if file_ext in valid_extensions and file not in invalid_files:
                     file_path = os.path.join(root, file)
                     relative_path = os.path.relpath(file_path, extension_dir)
 

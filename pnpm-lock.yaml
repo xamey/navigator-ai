@@ -54,6 +54,9 @@ importers:
 
   apps/extension:
     dependencies:
+      '@navigator-ai/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       react:
         specifier: ^19.0.0
         version: 19.0.0

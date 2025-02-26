@@ -112,19 +112,26 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
 });
 
 async function handleDOMUpdate(message: Message) {
-    if (!message.task_id || !message.dom_data) {
-        console.error('Missing required fields in DOM update');
-        return;
-    }
-
-    const updateData: DOMUpdate = {
-        task_id: message.task_id,
-        dom_data: message.dom_data,
-        result: Array.isArray(message.result) ? message.result : [],
-        iterations: currentIterations
-    };
-
     try {
+        if (!message.task_id || !message.dom_data) {
+            console.error('Missing required fields in DOM update');
+            return;
+        }
+
+        console.log('Received pre-processed DOM data for task:', message.task_id);
+
+        // The DOM structure is already parsed by the content script
+        // No need to re-parse it here
+        const updateData: DOMUpdate = {
+            task_id: message.task_id,
+            dom_data: message.dom_data,
+            result: Array.isArray(message.result) ? message.result : [],
+            iterations: currentIterations,
+            structure: message.dom_data.structure ?? {
+                lol: 'lol'
+            } // Use the pre-parsed structure
+        };
+
         console.log('Sending DOM update to API:', updateData.task_id);
         const response = await fetch(`${API_BASE_URL}/tasks/update`, {
             method: 'POST',
@@ -142,7 +149,7 @@ async function handleDOMUpdate(message: Message) {
         const data = await response.json();
         console.log('DOM update successful:', data);
     } catch (error) {
-        console.error('Error sending DOM update:', error);
+        console.error('Error in handleDOMUpdate:', error);
         // Optionally update active session status on error
         if (activeSession) {
             activeSession.status = 'error';

@@ -1,3 +1,4 @@
+import { parseDOM } from '@navigator-ai/core';
 import { FrontendDOMState, Message } from './types';
 
 console.log('Content script loaded');
@@ -203,12 +204,21 @@ function initDraggable(container: HTMLElement, dragHandle: HTMLElement) {
 function processDOM(task_id: string): FrontendDOMState {
     try {
         console.log('Processing DOM for task:', task_id);
+
+        // Parse the DOM here in the content script where we have full access
+        const domStructure = parseDOM(document);
+
         const domData: FrontendDOMState = {
             url: window.location.href,
             html: document.documentElement.outerHTML,
             title: document.title,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            // Instead of sending the DOM object, send the already parsed structure
+            structure: domStructure
         };
+
+        console.log('Sending DOM update to background, structure size:',
+            JSON.stringify(domData.structure).length, 'bytes');
 
         // Send data back to background script
         chrome.runtime.sendMessage({
@@ -216,6 +226,8 @@ function processDOM(task_id: string): FrontendDOMState {
             task_id,
             dom_data: domData,
             result: []
+        }, response => {
+            console.log('Background script response:', response);
         });
 
         return domData;

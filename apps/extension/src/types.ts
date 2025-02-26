@@ -3,6 +3,7 @@ export interface FrontendDOMState {
     html: string;
     title: string;
     timestamp: string;
+    structure?: object;
 }
 
 export interface DOMUpdate {
@@ -10,6 +11,7 @@ export interface DOMUpdate {
     dom_data: FrontendDOMState;
     result: unknown[];
     iterations: number;
+    structure: object;
 }
 
 export interface Message {
