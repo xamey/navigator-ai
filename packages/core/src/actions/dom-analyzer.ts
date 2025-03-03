@@ -7,6 +7,16 @@ const logger = {
     error: (message: string, error?: any) => console.error(`[DOM-Analyzer] ${message}`, error)
 };
 
+const API_SERVER_URL = "http://localhost:8000";
+
+export async function parseDOMonServer(html: string): Promise<DOMHashMap> {
+    const response = await fetch(`${API_SERVER_URL}/dom/parse`, {
+        method: "POST",
+        body: JSON.stringify(html),
+    });
+    return response.json();
+}
+
 export function parseDOM(document: Document): DOMHashMap {
     try {
         logger.debug("Starting DOM parsing");

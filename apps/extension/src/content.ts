@@ -206,6 +206,7 @@ function processDOM(task_id: string): FrontendDOMState {
         console.log('Processing DOM for task:', task_id);
 
         // Parse the DOM here in the content script where we have full access
+        // const domStructure = parseDOM(document)
         const domStructure = parseDOM(document);
 
         const domData: FrontendDOMState = {
