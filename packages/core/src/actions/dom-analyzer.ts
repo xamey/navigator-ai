@@ -12,7 +12,12 @@ const API_SERVER_URL = "http://localhost:8000";
 export async function parseDOMonServer(html: string): Promise<DOMHashMap> {
     const response = await fetch(`${API_SERVER_URL}/dom/parse`, {
         method: "POST",
-        body: JSON.stringify(html),
+        headers: {
+            "Content-Type": "application/json"  // Add this header
+        },
+        body: JSON.stringify({
+            html: html,
+        }),
     });
     return response.json();
 }

@@ -1,4 +1,4 @@
-import { DOMElementNode, DOMHashMap, DOMNode, parseDOM } from '@navigator-ai/core';
+import { DOMElementNode, DOMHashMap, DOMNode, parseDOMonServer } from '@navigator-ai/core';
 import { FrontendDOMState, Message } from './types';
 
 console.log('Content script loaded');
@@ -201,20 +201,23 @@ function initDraggable(container: HTMLElement, dragHandle: HTMLElement) {
 }
 
 // Process DOM and send data to background script
-function processDOM(task_id: string): FrontendDOMState {
+async function processDOM(task_id: string): Promise<FrontendDOMState> {
     try {
         console.log('Processing DOM for task:', task_id);
 
-        // Parse the DOM here in the content script where we have full access
-        // const domStructure = parseDOM(document)
-        const domStructure = parseDOM(document);
+        // Get the HTML content
+        const htmlContent = document.documentElement.outerHTML;
+
+        // Parse the DOM on the server instead of locally
+        console.log('Sending HTML to server for parsing...');
+        const domStructure = await parseDOMonServer(htmlContent);
+        console.log('Received parsed DOM structure from server');
 
         const domData: FrontendDOMState = {
             url: window.location.href,
-            html: document.documentElement.outerHTML,
+            html: htmlContent,
             title: document.title,
             timestamp: new Date().toISOString(),
-            // Instead of sending the DOM object, send the already parsed structure
             structure: domStructure
         };
 
@@ -264,8 +267,15 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
 
     if (message.type === 'processDOM' && message.task_id) {
         createExtensionContainer(); // Ensure container exists
-        processDOM(message.task_id);
-        if (sendResponse) sendResponse({ success: true });
+        processDOM(message.task_id)
+            .then(() => {
+                if (sendResponse) sendResponse({ success: true });
+            })
+            .catch(error => {
+                console.error('Error in processDOM:', error);
+                if (sendResponse) sendResponse({ success: false, error: error.message });
+            });
+        return true; // Keep channel open for async response
     }
     else if (message.type === 'toggleUI') {
         const isVisible = toggleUI();

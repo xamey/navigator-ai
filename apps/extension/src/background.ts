@@ -5,7 +5,7 @@ console.log('Background script initializing...');
 
 const API_BASE_URL = 'http://localhost:8000';
 let monitoringInterval: NodeJS.Timeout | null = null;
-const MAX_ITERATIONS = 2;
+const MAX_ITERATIONS = 1;
 let currentIterations = 0;
 let isPaused = false;
 

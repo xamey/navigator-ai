@@ -32,6 +32,8 @@ def get_xpath_for_element(element: Tag) -> str:
             parts.insert(0, part)
             current = current.parent
 
+        # remove [document]
+        parts = [part for part in parts if part != "[document]"]
         return "/" + "/".join(parts)
     except Exception as error:
         logger.error(f"Error generating XPath: {error}")
