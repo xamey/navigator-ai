@@ -16,9 +16,5 @@ class DOMParseRequest(BaseModel):
 @router.post("/parse")
 async def dom_parse(request: DOMParseRequest):
     """Parse the DOM state and return the updated DOM state"""
-    print(request.html)
     parsed_dom_state = parse_dom(request.html)
-
-    print(parsed_dom_state)
-
     return parsed_dom_state

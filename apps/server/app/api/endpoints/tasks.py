@@ -1,6 +1,8 @@
 from app.api.services.storage_service import StorageService
 from app.api.services.task_service import TaskService
-from app.models.dom import DOMUpdate, DOMUpdateResponse
+from app.api.utils.prompts import build_system_prompt, build_user_message
+from app.config import settings
+from app.models.dom import DOMState, DOMUpdate, DOMUpdateResponse
 from app.models.tasks import TaskCreate, TaskResponse
 from fastapi import APIRouter, HTTPException
 
@@ -29,11 +31,27 @@ async def update_task(update: DOMUpdate):
 
         # Store the update
         files = StorageService.save_dom_snapshot(update)
+        dom_state = DOMState(
+            url=update.dom_data.url,
+            element_tree=update.structure
+        )
+        # Build user message
+        user_message, xpath_map = build_user_message(dom_state)
+
+        system_message = build_system_prompt()
+
+        # write this to a file in the snapshots directory
+        with open(f"{settings.SNAPSHOTS_DIR}/{update.task_id}_dom_snapshot_prompt.txt", "w") as f:
+            print("Writing to file to - ",
+                  f"{settings.SNAPSHOTS_DIR}/{update.task_id}_dom_snapshot_prompt.txt")
+            f.write(system_message + "\n" + user_message)
+
+        print("Done writing to file")
 
         return DOMUpdateResponse(
             status="success",
             message="DOM update received and stored",
-            files=files
+            files={}
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

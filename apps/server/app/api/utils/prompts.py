@@ -1,20 +1,36 @@
 from typing import Dict, List, Optional
 
-from apps.server.app.models.dom import DOMState
+from app.api.utils.dom_parser.optimizer import DOMOptimizer
+from app.api.utils.dom_parser.optimizer2 import generate_minihtml_for_llm
+from app.api.utils.dom_parser.optimizer3 import \
+    generate_extreme_minimal_dom_for_llm
+from app.api.utils.dom_parser.optimizer5 import \
+    generate_xpath_map_and_minimal_dom_for_llm
+from app.api.utils.dom_parser.optimizer6 import \
+    generate_perfected_minimal_dom_for_llm
+from app.api.utils.dom_parser.optimizer7 import \
+    generate_hybrid_minimal_dom_for_llm
+from app.api.utils.dom_parser.optimizer8 import \
+    generate_balanced_minimal_dom_for_llm
+from app.api.utils.dom_parser.optimizer9 import \
+    generate_structured_html_for_llm
+from app.models.dom import DOMState
 
 
-def build_system_prompt(self):
+def build_system_prompt():
     prompt = """
 You are a helpful assistant that helps users interact with web pages.
 You will receive:
-    1.  A description of the user's task.
-    2.  The current URL of the web page.
-    3.  A list of DOM elements in structured format on the page, each with a unique index and xpath.
-    4.  An array of actions that have been performed previously. This is can be empty as well.
+    1. A description of the user's task.
+    2. The current URL of the web page.
+    3. A list of DOM elements in a simplified format with XPath references (data-xref).
+    4. An array of actions that have been performed previously. This can be empty as well.
 Your task is to generate a JSON response containing a list of actions to perform to complete the user's task.
 
-**ALWAYS** respond with valid JSON in this exact format:
+IMPORTANT: Elements use short XPath references (xpath1, xpath2, etc.) instead of full XPaths to save tokens. 
+In your response, refer to elements by their data-xref attribute value or data-selector attribute.
 
+**ALWAYS** respond with valid JSON in this exact format:
 ```json
 {
   "current_state": {
@@ -25,29 +41,38 @@ Your task is to generate a JSON response containing a list of actions to perform
   "actions": [
     {
       "type": "ACTION_TYPE (click|input|scroll|url)",
-      "selector": "CSS_SELECTOR", // CSS Selector is preferred
-      "xpath": "XPATH",         // XPath should be based on the provided xpath in structured DOM
-      "text": "TEXT_TO_INPUT",   // Only for 'input' actions
-      "amount": NUMBER           // Only for 'scroll' actions (pixels)
-      "url": 'url'               // only for url
+      "xpath_ref": "xpath1",  // Use data-xref attribute 
+      "selector": "CSS_SELECTOR",  // Alternatively use data-selector attribute
+      "text": "TEXT_TO_INPUT",  // Only for 'input' actions
+      "amount": NUMBER,  // Only for 'scroll' actions (pixels)
+      "url": "URL"  // Only for 'url' actions
     }
   ],
-    "is_done": true/false
-    }
+  "is_done": true/false
+}
     """
     return prompt
 
 
-def build_user_message(self, dom_state: DOMState, task: str, result: Optional[List[Dict]] = None):
-    dom_string = dom_state
+def build_user_message(dom_state: DOMState, task: str = None, result: Optional[List[Dict]] = None):
+    # Create optimized DOM representation
+    # optimizer = DOMOptimizer(max_elements=100, max_text_length=80)
+    # optimized_dom = optimizer.create_flat_interactive_summary(
+    #     dom_state.element_tree)
+    # mini_html = generate_minihtml_for_llm(dom_state)
+    # mini_html = generate_extreme_minimal_dom_for_llm(dom_state)
+    # mini_html = generate_mid_minimal_dom_for_llm(dom_state)
+    # mini_html, xpath_map = generate_xpath_map_and_minimal_dom_for_llm(
+    # dom_state)
+    # mini_html, xpath_map = generate_perfected_minimal_dom_for_llm(dom_state)
+    # mini_html, xpath_map = generate_hybrid_minimal_dom_for_llm(dom_state)
+    # mini_html, xpath_map = generate_balanced_minimal_dom_for_llm(dom_state)
+    mini_html, xpath_map = generate_structured_html_for_llm(dom_state)
     content = f"""
-    
-    [Current state starts here]
-    Current url: {dom_state.url}
-    Interactive elements from current page:
-    {dom_string}
-    """
+Current url: {dom_state.url}
+Interactive elements from current page:
+{mini_html}
+"""
     if result:
         content += f"\n Action result: {result}"
-
-    return content
+    return content, xpath_map
