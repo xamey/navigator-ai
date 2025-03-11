@@ -4,7 +4,7 @@ import os
 from app.api.services.storage_service import StorageService
 from app.api.services.task_service import TaskService
 from app.api.utils.prompts import build_system_prompt, build_user_message
-from app.api.utils.dom_parser.optimizerdome12 import process_element_references
+from app.api.utils.dom_parser.dom_optimizer import process_element_references
 from app.config import settings
 from app.models.dom import DOMState, DOMUpdate, DOMUpdateResponse
 from app.models.tasks import TaskCreate, TaskResponse

@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional
 
-from app.api.utils.dom_parser.optimizerdome12 import generate_highlight_style_dom
+from app.api.utils.dom_parser.dom_optimizer import generate_highlight_style_dom
 from app.models.dom import DOMState
 
 def build_system_prompt():
