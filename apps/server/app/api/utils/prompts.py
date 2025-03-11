@@ -1,25 +1,7 @@
 from typing import Dict, List, Optional
 
-from app.api.utils.dom_parser.optimizer import DOMOptimizer
-from app.api.utils.dom_parser.optimizer2 import generate_minihtml_for_llm
-from app.api.utils.dom_parser.optimizer3 import \
-    generate_extreme_minimal_dom_for_llm
-from app.api.utils.dom_parser.optimizer5 import \
-    generate_xpath_map_and_minimal_dom_for_llm
-from app.api.utils.dom_parser.optimizer6 import \
-    generate_perfected_minimal_dom_for_llm
-from app.api.utils.dom_parser.optimizer7 import \
-    generate_hybrid_minimal_dom_for_llm
-from app.api.utils.dom_parser.optimizer8 import \
-    generate_balanced_minimal_dom_for_llm
-from app.api.utils.dom_parser.optimizer9 import \
-    generate_structured_html_for_llm
-from app.api.utils.dom_parser.optimizer10 import \
-    generate_token_efficient_dom_for_llm
 from app.api.utils.dom_parser.optimizerdome12 import generate_highlight_style_dom
 from app.models.dom import DOMState
-from app.api.utils.dom_parser.optimizer111 import generate_complete_compact_dom
-from app.api.utils.dom_parser.optimizer12 import generate_fixed_compact_dom
 
 def build_system_prompt():
     prompt = """You are a helpful assistant that helps users interact with web pages.

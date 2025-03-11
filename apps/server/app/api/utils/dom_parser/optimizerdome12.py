@@ -1,6 +1,8 @@
 import logging
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
+from app.api.utils.llm import GenerateResponse
+
 logger = logging.getLogger("dom-mapper")
 
 class HighlightStyleMapper:
@@ -419,3 +421,33 @@ def generate_highlight_style_dom(dom_state, include_attributes=None):
         dom_state.element_tree)
     
     return highlight_repr, xpath_map, selector_map
+
+
+def process_element_references(response_json: GenerateResponse, xpath_map, selector_map):
+    """Process element references in LLM response to map them to XPaths or selectors."""
+    if not response_json or not hasattr(response_json, 'actions'):
+        return response_json
+        
+    actions = response_json.actions
+    
+    for action in actions:
+        # First check for element_id (primary field from system prompt)
+        if hasattr(action, 'element_id') and action.element_id:
+            element_id = action.element_id
+            
+            # Check if it's in our maps
+            if element_id in xpath_map:
+                action.xpath_ref = xpath_map[element_id]
+                
+            if element_id in selector_map:
+                action.selector = selector_map[element_id]
+        
+        # Backward compatibility with xpath_ref
+        elif hasattr(action, 'xpath_ref') and action.xpath_ref:
+            element_id = action.xpath_ref
+            if element_id in xpath_map:
+                action.xpath = xpath_map[element_id]
+            if element_id in selector_map:
+                action.selector = selector_map[element_id]
+    
+    return response_json
