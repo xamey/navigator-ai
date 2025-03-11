@@ -54,10 +54,6 @@ class DOMTextNode(BaseModel):
     isVisible: bool
 
 
-# class DOMHashMap(BaseModel):
-#     __root__: Dict[str, Union[DOMElementNode, DOMTextNode]]
-
-
 class DOMUpdate(BaseModel):
     task_id: str
     dom_data: DOMData
@@ -69,4 +65,13 @@ class DOMUpdate(BaseModel):
 class DOMUpdateResponse(BaseModel):
     status: str
     message: str
-    files: Dict[str, str]
+    result: Any
+
+
+class DOMState(BaseModel):
+    url: str
+    element_tree: Dict[str, Union[DOMElementNode, DOMTextNode]]
+
+
+DOMNode = Union[DOMElementNode, DOMTextNode]
+DOMHashMap = Dict[str, DOMNode]

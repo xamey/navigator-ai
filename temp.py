@@ -21,7 +21,7 @@ def write_extension_code_to_file(extension_dir, output_file):
 
                 # List of file extensions to include
                 valid_extensions = ['.ts', '.tsx', '.js',
-                                    '.jsx', '.html', '.css', '.json']
+                                    '.jsx', '.html', '.css', '.py']
 
                 invalid_files = ['package-lock.json']
 
@@ -49,8 +49,8 @@ def write_extension_code_to_file(extension_dir, output_file):
 if __name__ == "__main__":
     # Specify the extension directory and output file
     # Adjust this path to match your project structure
-    extension_dir = "./apps/extension"
-    output_file = "extension_code.txt"
+    extension_dir = "./"
+    output_file = "full_code.txt"
 
     write_extension_code_to_file(extension_dir, output_file)
     print(f"Code has been written to {output_file}")
