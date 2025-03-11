@@ -1,14 +1,85 @@
 import base64
+import json
 import os
+import re
+from typing import List, Optional
 
 from google import genai
 from google.genai import types
+from pydantic import BaseModel, Field
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+client = genai.Client(
+    api_key=os.environ.get("GEMINI_API_KEY"),
+)
+
+class Action(BaseModel):
+    type: str
+    element_id: Optional[str] = None
+    xpath_ref: Optional[str] = None
+    selector: Optional[str] = None
+    text: Optional[str] = None
+    amount: Optional[int] = None
+    url: Optional[str] = None
+
+class CurrentState(BaseModel):
+    page_summary: str
+    evaluation_previous_goal: str
+    next_goal: str
+
+class GenerateResponse(BaseModel):
+    current_state: CurrentState
+    actions: List[Action]
+    is_done: bool
+
+def parse_json_from_text(text):
+    """Extract and parse JSON from text, handling potential formatting issues."""
+    # Clean the text
+    text = text.strip()
+    
+    # Handle markdown code blocks
+    if text.startswith("```json"):
+        # Remove opening markdown
+        text = text[7:].strip()
+    elif text.startswith("```"):
+        # Remove opening markdown
+        text = text[3:].strip()
+        
+    # Remove closing markdown
+    if text.endswith("```"):
+        text = text[:-3].strip()
+    
+    # Try to parse the clean text
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # If that fails, try to extract JSON using regex
+        json_pattern = r'\{[\s\S]*\}'
+        match = re.search(json_pattern, text)
+        
+        if match:
+            json_candidate = match.group(0)
+            try:
+                return json.loads(json_candidate)
+            except json.JSONDecodeError:
+                pass
+    
+    # Return default structure if all parsing attempts fail
+    return {
+        "current_state": {
+            "page_summary": "Failed to parse LLM output.",
+            "evaluation_previous_goal": "Unknown",
+            "next_goal": "Try different approach"
+        },
+        "actions": [],
+        "is_done": False
+    }
 
 
-def generate():
-    client = genai.Client(
-        api_key=os.environ.get("GEMINI_API_KEY"),
-    )
+def generate(user_prompt, system_prompt) -> GenerateResponse:
 
     model = "gemini-2.0-pro-exp-02-05"
     contents = [
@@ -16,8 +87,7 @@ def generate():
             role="user",
             parts=[
                 types.Part.from_text(
-                    text="""Task: spinning up a lambda function
-"""
+                    text=user_prompt
                 ),
             ],
         ),
@@ -55,9 +125,12 @@ def generate():
                     items=genai.types.Schema(
                         type=genai.types.Type.OBJECT,
                         enum=[],
-                        required=["type", "xpath_ref", "selector"],
+                        required=["type"],
                         properties={
                             "type": genai.types.Schema(
+                                type=genai.types.Type.STRING,
+                            ),
+                            "element_id": genai.types.Schema(
                                 type=genai.types.Type.STRING,
                             ),
                             "xpath_ref": genai.types.Schema(
@@ -70,7 +143,7 @@ def generate():
                                 type=genai.types.Type.STRING,
                             ),
                             "amount": genai.types.Schema(
-                                type=genai.types.Type.STRING,
+                                type=genai.types.Type.INTEGER,
                             ),
                             "url": genai.types.Schema(
                                 type=genai.types.Type.STRING,
@@ -85,47 +158,42 @@ def generate():
         ),
         system_instruction=[
             types.Part.from_text(
-                text="""You are a helpful assistant that helps users interact with web pages.
-You will receive:
-    1. A description of the user's task.
-    2. The current URL of the web page.
-    3. A list of DOM elements in a simplified format with XPath references (data-xref).
-    4. An array of actions that have been performed previously. This can be empty as well.
-Your task is to generate a JSON response containing a list of actions to perform to complete the user's task.
-
-IMPORTANT: Elements use short XPath references (xpath1, xpath2, etc.) instead of full XPaths to save tokens. 
-In your response, refer to elements by their data-xref attribute value or data-selector attribute.
-
-**ALWAYS** respond with valid JSON in this exact format:
-```json
-{
-  \"current_state\": {
-        \"page_summary\": \"Quick detailed summary of new information from the current page which is not yet in the task history memory. Be specific with details which are important for the task. This is not on the meta level, but should be facts. If all the information is already in the task history memory, leave this empty.\",
-        \"evaluation_previous_goal\": \"Success|Failed|Unknown - Analyze the current elements and the image to check if the previous goals/actions are successful like intended by the task. Ignore the action result. The website is the ground truth. Also mention if something unexpected happened like new suggestions in an input field. Shortly state why/why not\",
-        \"next_goal\": \"What needs to be done with the next actions\"
-    },
-  \"actions\": [
-    {
-      \"type\": \"ACTION_TYPE (click|input|scroll|url)\",
-      \"xpath_ref\": \"xpath1\",  // Use data-xref attribute 
-      \"selector\": \"CSS_SELECTOR\",  // Alternatively use data-selector attribute
-      \"text\": \"TEXT_TO_INPUT\",  // Only for 'input' actions
-      \"amount\": NUMBER,  // Only for 'scroll' actions (pixels)
-      \"url\": \"URL\"  // Only for 'url' actions
-    }
-  ],
-  \"is_done\": true/false
-}"""
+                text=system_prompt
             ),
         ],
     )
-
-    for chunk in client.models.generate_content_stream(
+    
+    # Make the API call
+    response = client.models.generate_content(
         model=model,
         contents=contents,
         config=generate_content_config,
-    ):
-        print(chunk.text, end="")
+    )
+    print(response.text)
+    print(response.usage_metadata)
+    
+    # Process response to ensure it's valid JSON
+    try:
+        # Try to parse the response text as JSON to validate it
+        json_response = json.loads(response.text)
+        return GenerateResponse.model_validate(json_response)
+    except json.JSONDecodeError:
+        # If parsing fails, try to extract JSON
+        print("Warning: LLM returned invalid JSON. Attempting to fix...")
+        fixed_json = parse_json_from_text(response.text)
+        return GenerateResponse.model_validate(fixed_json)
+    except Exception as e:
+        print(f"Error processing response: {e}")
+        # Return a fallback JSON response
+        fallback = {
+            "current_state": {
+                "page_summary": "Error processing LLM response.",
+                "evaluation_previous_goal": "Unknown",
+                "next_goal": "Please try again"
+            },
+            "actions": [],
+            "is_done": False
+        }
+        return GenerateResponse.model_validate(fallback)
 
-
-generate()
+# generate()

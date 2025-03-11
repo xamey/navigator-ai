@@ -65,7 +65,7 @@ class DOMUpdate(BaseModel):
 class DOMUpdateResponse(BaseModel):
     status: str
     message: str
-    files: Dict[str, str]
+    result: Any
 
 
 class DOMState(BaseModel):
