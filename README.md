@@ -1,84 +1,46 @@
-# Turborepo starter
 
-This Turborepo starter is maintained by the Turborepo core team.
+<h1 align="center">Navigator AI: Intelligent Automation WITHIN the Browser</h1>
 
-## Using this example
+Navigator AI empowers AI agents to seamlessly interact with and automate tasks within web browsers.  Unlike traditional browser automation tools, Navigator AI will offer, both a **component library** for direct integration into web applications and a **browser extension** for end-user automation, all powered by advanced language models. Best part - fully open source.
 
-Run the following command:
+## Key Features
 
-```sh
-npx create-turbo@latest
-```
+* **Direct Web Integration:**  Embeddable React components allow developers to add browser automation capabilities *directly within their web applications*. No external tools or complex setups are required to automate their website.  This is a key differentiator from tools like Browse.ai that rely on external Playwright scripts.
+* **User-Friendly Extension :**  A browser extension provides an intuitive interface for users to create, manage, and run automation tasks directly in their browser.
+* **Knowledge-base**: Add rules, knowledge bases, docs, etc. and agent will give a higher priority to it than its LLM based workflow
+* **Self-improving**: Improves on the go based on how user interacts with the page when not using the agent.
 
-## What's inside?
+### Technology Stack
 
-This Turborepo includes the following packages/apps:
+* Frontend: React, Vite, TypeScript (for both component library and extension)
+* Backend: Python, FastAPI
+* Frontend and backend is packed in turbo-repo for easy management
+* Database: PostgreSQL, Redis, Weaviate (thorugh docker)
 
-### Apps and Packages
+### Roadmap (TODOs)
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+[ ] Self-Improving Agents:
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+- Implement feedback loops where the agent learns from user corrections and successful/failed task executions.
+- Track and store off-the-agent activity of user if permitted
 
-### Utilities
+[ ] Knowledge Bases and Rules:
 
-This Turborepo has some additional tools already setup for you:
+- Allow users and developers to define custom rules and knowledge bases to guide the agent's behavior. [ ] Visual Task Builder (Extension): Develop a drag-and-drop interface for creating automation workflows within the extension.
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+[ ] Scheduled Tasks: Allow users to schedule tasks to run at specific times or intervals.
 
-### Build
+[ ] Advanced DOM Interaction: Implement more sophisticated element selection methods (e.g., v-LLM integration).
 
-To build all apps and packages, run the following command:
+[ ] Support for More Complex Web Interactions:
 
-```
-cd my-turborepo
-pnpm build
-```
+- Handling iframes and shadow DOM.
+- Managing authentication and user sessions by asking llm to pause and notify user if stuck
+- Pause if stuck
 
-### Develop
+[ ] Third-party integrations: 
 
-To develop all apps and packages, run the following command:
+- Website based: AWS,  GCP, Amazon, etc.
+- LLM providers
 
-```
-cd my-turborepo
-pnpm dev
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-npx turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-npx turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
-- [Caching](https://turbo.build/repo/docs/core-concepts/caching)
-- [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
-- [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)
-- [Configuration Options](https://turbo.build/repo/docs/reference/configuration)
-- [CLI Usage](https://turbo.build/repo/docs/reference/command-line-reference)
+[ ] Record a workflow: Let the user record a workflow and then AI will execute the same
