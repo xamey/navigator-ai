@@ -3,201 +3,110 @@ import { FrontendDOMState, Message } from './types';
 
 console.log('Content script loaded');
 
-// Function to create the extension container
-function createExtensionContainer() {
-    console.log('Creating extension container');
+let sidebarContainer: HTMLElement | null = null;
+
+// Function to create the extension container as a sidebar
+function createSidebarContainer() {
+    console.log('Creating sidebar container');
 
     // Check if container already exists
-    let container = document.getElementById('browser-automation-extension');
+    let container = document.getElementById('navigator-ai-sidebar');
     if (container) {
-        console.log('Container already exists');
-        container.style.display = 'block';
+        console.log('Sidebar container already exists');
         return container;
     }
 
-    // Create container for the extension
+    // Create container for the sidebar
     container = document.createElement('div');
-    container.id = 'browser-automation-extension';
+    container.id = 'navigator-ai-sidebar';
 
-    // Only set these essential properties directly on the container
+    // Set essential properties
     container.style.position = 'fixed';
-    container.style.bottom = '20px';
-    container.style.right = '20px';
-    container.style.zIndex = '9999999'; // Still high but not maximum
-    container.style.pointerEvents = 'none'; // Important! Allow clicks to pass through
-    container.style.transition = 'all 0.3s ease';
+    container.style.top = '0';
+    container.style.right = '0';
+    container.style.width = '0'; // Start with zero width
+    container.style.height = '100%';
+    container.style.zIndex = '9999999';
+    container.style.transition = 'width 0.3s ease';
+    container.style.overflow = 'hidden';
 
-    // Create a shadow root - this isolates our CSS
+    // Create a shadow root to isolate our CSS
     const shadow = container.attachShadow({ mode: 'closed' });
-
-    // Create a wrapper inside the shadow DOM that will catch pointer events
-    const wrapper = document.createElement('div');
-    wrapper.className = 'extension-wrapper';
-    wrapper.style.pointerEvents = 'auto';
-    wrapper.style.position = 'relative';
 
     // Create styles for shadow DOM
     const style = document.createElement('style');
     style.textContent = `
-        .extension-wrapper {
-            width: 400px;
-            height: auto;
-            max-height: 550px;
-            background-color: transparent !important;
+        :host {
+            color-scheme: light dark;
         }
+        
         iframe {
             width: 100%;
-            height: 550px;
+            height: 100%;
             border: none;
-            border-radius: 8px;
-            box-shadow: none !important;
             background-color: transparent !important;
-            color-scheme: gjfdk fjskl;
-            opacity: 0.98;
         }
-        .drag-handle {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 30px;
-            cursor: move;
-            z-index: 1;
+        
+        .sidebar-open {
+            width: 384px !important; /* 96 * 4 = 384px for w-96 in Tailwind */
+        }
+        
+        .sidebar-closed {
+            width: 0 !important;
         }
     `;
 
-    // Create iframe
+    // Create iframe to hold the sidebar content
     const iframe = document.createElement('iframe');
     iframe.src = chrome.runtime.getURL('popup.html');
     iframe.style.backgroundColor = 'transparent';
-    iframe.style.backdropFilter = 'none';
-    // iframe.style.webkitBackdropFilter = 'none';
     iframe.style.opacity = '0.98';
     iframe.allow = 'autoplay';
 
-    // Create drag handle
-    const dragHandle = document.createElement('div');
-    dragHandle.className = 'drag-handle';
-
     // Add elements to shadow DOM
     shadow.appendChild(style);
-    shadow.appendChild(wrapper);
-    wrapper.appendChild(iframe);
-    wrapper.appendChild(dragHandle);
+    shadow.appendChild(iframe);
 
     // Add container to document body
     document.body.appendChild(container);
 
-    // Make draggable
-    initDraggable(container, dragHandle);
+    // Store for later use
+    sidebarContainer = container;
 
     return container;
 }
 
-// Initialize draggable functionality
-function initDraggable(container: HTMLElement, dragHandle: HTMLElement) {
-    let isDragging = false;
-    let initialX: number;
-    let initialY: number;
-    let startPositionX: number;
-    let startPositionY: number;
+// Function to update sidebar visibility state
+function updateSidebarState(isOpen: boolean) {
+    console.log('Updating sidebar state:', isOpen);
 
-    // Store position in local storage
-    function savePosition(x: number, y: number) {
-        localStorage.setItem('popupPosition', JSON.stringify({ left: x, top: y }));
+    if (!sidebarContainer) {
+        sidebarContainer = createSidebarContainer();
     }
 
-    function loadPosition() {
-        try {
-            const position = localStorage.getItem('popupPosition');
-            if (position) {
-                const { left, top } = JSON.parse(position);
-                container.style.left = left + 'px';
-                container.style.top = top + 'px';
-                container.style.right = 'auto';
-                container.style.bottom = 'auto';
-            }
-        } catch (e) {
-            console.error('Error loading position:', e);
-        }
+    if (isOpen) {
+        sidebarContainer.style.width = '384px'; // w-96 in Tailwind
+        sidebarContainer.classList.add('sidebar-open');
+        sidebarContainer.classList.remove('sidebar-closed');
+    } else {
+        sidebarContainer.style.width = '0';
+        sidebarContainer.classList.add('sidebar-closed');
+        sidebarContainer.classList.remove('sidebar-open');
+    }
+}
+
+// Toggle sidebar visibility
+function toggleSidebar() {
+    console.log('Toggling sidebar');
+
+    if (!sidebarContainer) {
+        sidebarContainer = createSidebarContainer();
     }
 
-    // Set initial position from storage or default
-    loadPosition();
+    const isCurrentlyOpen = sidebarContainer.classList.contains('sidebar-open');
+    updateSidebarState(!isCurrentlyOpen);
 
-    // Handle mousedown event to start drag
-    dragHandle.addEventListener('mousedown', (e) => {
-        // Only handle left mouse button
-        if (e.button !== 0) return;
-
-        // Check if the element has the drag-handle class
-        // This ensures dragging only works when minimized
-        if (!dragHandle.classList.contains('drag-handle')) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        // Get current container position
-        const style = window.getComputedStyle(container);
-        startPositionX = parseInt(style.left, 10) || 0;
-        startPositionY = parseInt(style.top, 10) || 0;
-
-        // Calculate offset from mouse to container corner
-        initialX = e.clientX - startPositionX;
-        initialY = e.clientY - startPositionY;
-
-        isDragging = true;
-        container.classList.add('dragging');
-
-        // Add document-wide event listeners
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.addEventListener('mouseleave', onMouseUp);
-    });
-
-    function onMouseMove(e: MouseEvent) {
-        if (!isDragging) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        // Calculate new position
-        const x = e.clientX - initialX;
-        const y = e.clientY - initialY;
-
-        // Constrain to viewport
-        const maxX = window.innerWidth - container.offsetWidth;
-        const maxY = window.innerHeight - container.offsetHeight;
-        const newX = Math.max(0, Math.min(x, maxX));
-        const newY = Math.max(0, Math.min(y, maxY));
-
-        // Set the new position directly
-        container.style.left = `${newX}px`;
-        container.style.top = `${newY}px`;
-        container.style.right = 'auto';
-        container.style.bottom = 'auto';
-    }
-
-    function onMouseUp(e: MouseEvent) {
-        if (!isDragging) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        isDragging = false;
-        container.classList.remove('dragging');
-
-        // Save the final position
-        const style = window.getComputedStyle(container);
-        const finalX = parseInt(style.left, 10);
-        const finalY = parseInt(style.top, 10);
-        savePosition(finalX, finalY);
-
-        // Clean up event listeners
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.removeEventListener('mouseleave', onMouseUp);
-    }
+    return !isCurrentlyOpen;
 }
 
 // Process DOM and send data to background script
@@ -222,7 +131,7 @@ async function processDOM(task_id: string): Promise<FrontendDOMState> {
         };
 
         console.log('Highlighting interactive elements');
-        highlighInteractiveElements(domStructure);
+        highlightInteractiveElements(domStructure);
 
         console.log('Sending DOM update to background, structure size:',
             JSON.stringify(domData.structure).length, 'bytes');
@@ -244,52 +153,10 @@ async function processDOM(task_id: string): Promise<FrontendDOMState> {
     }
 }
 
-// Toggle UI visibility
-function toggleUI() {
-    console.log('Toggling UI');
-    const container = createExtensionContainer();
+function highlightInteractiveElements(domStructure: DOMHashMap) {
+    // Clear previous highlights first
+    clearAllHighlights();
 
-    // Check current state
-    const isHidden = container.style.display === 'none';
-
-    if (isHidden) {
-        container.style.display = 'block';
-    } else {
-        container.style.display = 'none';
-    }
-
-    return !isHidden;
-}
-
-// Listen for messages from the background script
-chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
-    console.log('Content script received message:', message);
-
-    if (message.type === 'processDOM' && message.task_id) {
-        createExtensionContainer(); // Ensure container exists
-        processDOM(message.task_id)
-            .then(() => {
-                if (sendResponse) sendResponse({ success: true });
-            })
-            .catch(error => {
-                console.error('Error in processDOM:', error);
-                if (sendResponse) sendResponse({ success: false, error: error.message });
-            });
-        return true; // Keep channel open for async response
-    }
-    else if (message.type === 'toggleUI') {
-        const isVisible = toggleUI();
-        if (sendResponse) sendResponse({ success: true, isVisible });
-    }
-
-    return true; // Keep channel open for async response
-});
-
-// Initialize on content script load
-console.log('Creating UI container on content script load');
-createExtensionContainer();
-
-function highlighInteractiveElements(domStructure: DOMHashMap) {
     const interactiveElements = Object.values(domStructure).filter((node) => {
         if (!node.isVisible) {
             return false;
@@ -304,26 +171,70 @@ function highlighInteractiveElements(domStructure: DOMHashMap) {
     // highlight interactive elements by adding style and color to the dom by accessing element using xpath
     interactiveElements.forEach((element: DOMNode, index: number) => {
         const xpath = (element as DOMElementNode).xpath;
-        const highlightedElement = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue as HTMLElement;
-        if (highlightedElement && highlightedElement instanceof HTMLElement) {
-            highlightedElement.style.border = `2px solid ${colors[index % colors.length]}`;
-        } else {
-            console.error('highlightedElement is not an HTMLElement:', highlightedElement);
+        try {
+            const highlightedElement = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue as HTMLElement;
+            if (highlightedElement && highlightedElement instanceof HTMLElement) {
+                highlightedElement.style.outline = `2px solid ${colors[index % colors.length]}`;
+                highlightedElement.style.outlineOffset = '2px';
+                highlightedElement.classList.add('navigator-ai-highlight');
+            }
+        } catch (error) {
+            console.error('Error highlighting element:', error);
         }
     });
 }
 
+// Function to clear all highlights
+function clearAllHighlights() {
+    const highlightedElements = document.querySelectorAll('.navigator-ai-highlight');
+    highlightedElements.forEach((el) => {
+        if (el instanceof HTMLElement) {
+            el.style.outline = '';
+            el.style.outlineOffset = '';
+            el.classList.remove('navigator-ai-highlight');
+        }
+    });
+}
+
+// Listen for messages from the background script
+chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
+    console.log('Content script received message:', message);
+
+    try {
+        if (message.type === 'processDOM' && message.task_id) {
+            createSidebarContainer(); // Ensure container exists
+            processDOM(message.task_id)
+                .then(() => {
+                    if (sendResponse) sendResponse({ success: true });
+                })
+                .catch(error => {
+                    console.error('Error in processDOM:', error);
+                    if (sendResponse) sendResponse({ success: false, error: error.message });
+                });
+            return true; // Keep channel open for async response
+        }
+        else if (message.type === 'toggleUI' || message.type === 'toggleSidebar') {
+            const isVisible = toggleSidebar();
+            if (sendResponse) sendResponse({ success: true, isVisible });
+        }
+        else if (message.type === 'updateSidebarState') {
+            updateSidebarState(message.isOpen || false);
+            if (sendResponse) sendResponse({ success: true });
+        }
+    } catch (error) {
+        console.error('Error handling message:', error);
+        if (sendResponse) sendResponse({ success: false, error: (error as Error).message });
+    }
+
+    return true; // Keep channel open for async response
+});
+
+// Initialize on content script load
+console.log('Creating sidebar container on content script load');
+createSidebarContainer();
+
 const colors = [
-    "#FF0000",
-    "#00FF00",
-    "#0000FF",
-    "#FFA500",
-    "#800080",
-    "#008080",
-    "#FF69B4",
-    "#4B0082",
-    "#FF4500",
-    "#2E8B57",
-    "#DC143C",
-    "#4682B4",
+    "#FF0000", "#00FF00", "#0000FF", "#FFA500",
+    "#800080", "#008080", "#FF69B4", "#4B0082",
+    "#FF4500", "#2E8B57", "#DC143C", "#4682B4",
 ];

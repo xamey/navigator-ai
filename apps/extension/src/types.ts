@@ -1,3 +1,4 @@
+// src/types.ts
 import { DOMHashMap } from "@navigator-ai/core";
 
 export interface FrontendDOMState {
@@ -24,6 +25,7 @@ export interface Message {
     result?: unknown[];
     iterations?: number;
     isPaused?: boolean;
+    isOpen?: boolean;   // New property for sidebar state
 }
 
 export interface TaskState {
@@ -33,4 +35,10 @@ export interface TaskState {
     isRunning: boolean;
     iterations: number;
     isPaused: boolean;
+}
+
+// New type for sidebar settings
+export interface SidebarState {
+    isOpen: boolean;
+    activeTab: 'automation' | 'knowledge' | 'history' | 'settings';
 }

@@ -37,13 +37,13 @@ function isValidUrl(url: string): boolean {
         !url.startsWith('brave://');
 }
 
-// Handle extension icon click
+// Handle extension icon click - toggle sidebar
 chrome.action.onClicked.addListener((tab) => {
-    console.log('Extension icon clicked, toggling UI in tab:', tab.id);
+    console.log('Extension icon clicked, toggling sidebar in tab:', tab.id);
     if (tab.id && tab.url && isValidUrl(tab.url)) {
-        chrome.tabs.sendMessage(tab.id, { action: "toggleUI" })
+        chrome.tabs.sendMessage(tab.id, { type: 'toggleSidebar' })
             .catch(err => {
-                console.error('Error sending toggleUI message:', err);
+                console.error('Error sending toggleSidebar message:', err);
                 // Try injecting content script if it's not loaded
                 chrome.scripting.executeScript({
                     target: { tabId: tab.id! },
@@ -51,14 +51,14 @@ chrome.action.onClicked.addListener((tab) => {
                 })
                     .then(() => {
                         // Now try sending the message again
-                        chrome.tabs.sendMessage(tab.id!, { action: "toggleUI" });
+                        chrome.tabs.sendMessage(tab.id!, { type: 'toggleSidebar' });
                     })
                     .catch(injectErr => {
                         console.error('Failed to inject content script:', injectErr);
                     });
             });
     } else {
-        console.log('Cannot toggle UI on this page (likely a chrome:// URL)');
+        console.log('Cannot toggle sidebar on this page (likely a chrome:// URL)');
     }
 });
 
@@ -78,21 +78,21 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
         } else if (message.type === 'dom_update') {
             handleDOMUpdate(message);
             sendResponse({ success: true });
-        } else if (message.type === 'toggleUI') {
+        } else if (message.type === 'toggleSidebar') {
             // Find the active tab and send toggle message
             chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
                 if (tabs.length > 0 && tabs[0].id && tabs[0].url && isValidUrl(tabs[0].url)) {
-                    chrome.tabs.sendMessage(tabs[0].id, { action: "toggleUI" })
+                    chrome.tabs.sendMessage(tabs[0].id, { type: 'toggleSidebar' })
                         .then(() => {
                             sendResponse({ success: true });
                         })
                         .catch(err => {
-                            console.error('Error sending toggleUI:', err);
+                            console.error('Error sending toggleSidebar:', err);
                             sendResponse({ success: false, error: err.message });
                         });
                 } else {
-                    console.log('Cannot toggle UI on this page (likely a chrome:// URL)');
-                    sendResponse({ success: false, error: 'Cannot toggle UI on this page' });
+                    console.log('Cannot toggle sidebar on this page (likely a chrome:// URL)');
+                    sendResponse({ success: false, error: 'Cannot toggle sidebar on this page' });
                 }
             });
             return true; // Keep channel open for async response
@@ -121,7 +121,6 @@ async function handleDOMUpdate(message: Message) {
         console.log('Received pre-processed DOM data for task:', message.task_id);
 
         // The DOM structure is already parsed by the content script
-        // No need to re-parse it here
         const updateData: DOMUpdate = {
             task_id: message.task_id,
             dom_data: message.dom_data,
