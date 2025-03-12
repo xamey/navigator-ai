@@ -3,12 +3,15 @@
 
 Navigator AI empowers AI agents to seamlessly interact with and automate tasks within web browsers.  Unlike traditional browser automation tools, Navigator AI will offer, both a **component library** for direct integration into web applications and a **browser extension** for end-user automation, all powered by advanced language models. Best part - fully open source.
 
+Simply, consider it as open source 'Cursor'for websites and apps.
+
 ## Key Features
 
-* **Direct Web Integration:**  Embeddable React components allow developers to add browser automation capabilities *directly within their web applications*. No external tools or complex setups are required to automate their website.  This is a key differentiator from tools like Browse.ai that rely on external Playwright scripts.
+* **Direct Web Integration:**  Embeddable React/other framework components allow developers to add browser automation capabilities *directly within their web/mobile applications*. Once added, your users can easily use voice/text to automatically carry out any workflows on your app. 
 * **User-Friendly Extension :**  A browser extension provides an intuitive interface for users to create, manage, and run automation tasks directly in their browser.
 * **Knowledge-base**: Add rules, knowledge bases, docs, etc. and agent will give a higher priority to it than its LLM based workflow
 * **Self-improving**: Improves on the go based on how user interacts with the page when not using the agent.
+* **Knowledge-base** - allows you to add custom rules/docs etc. which will then be prioritized by the agent over its knowledge. With this, the agent will be specific for YOUR app and not generic.
 
 ### Technology Stack
 
