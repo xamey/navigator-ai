@@ -1,4 +1,6 @@
+// src/types.ts
 import { DOMHashMap } from "@navigator-ai/core";
+import { Action } from "@navigator-ai/core";
 
 export interface FrontendDOMState {
     url: string;
@@ -17,14 +19,29 @@ export interface DOMUpdate {
 }
 
 export interface Message {
-    type: string;
+    type: 'startTask' | 'startMonitoring' | 'stopMonitoring' | 'processDOM' | 'toggleSidebar' | 'toggleUI' | 'updateSidebarState' | 'dom_update' | 'pauseMonitoring' | 'resumeMonitoring' | 'executeActions' | 'startSequentialProcessing' | 'check_processing_status' | 'resetIterations' | 'singleDOMProcess' | 'ping';
     task?: string;
     task_id?: string;
     dom_data?: FrontendDOMState;
     result?: unknown[];
     iterations?: number;
+    maxIterations?: number;
     isPaused?: boolean;
+    isOpen?: boolean;   // New property for sidebar state
+    actions?: Action[];
+    isDone?: boolean;   // Property for signaling if processing is complete
 }
+
+// Processing status for DOM operations
+export type ProcessingStatus = 
+    'idle' |              // Not processing anything
+    'parsing' |           // Parsing DOM with server
+    'updating' |          // Sending update to API
+    'executing_actions' | // Executing actions from API
+    'waiting_for_server' | // Waiting for server response
+    'completed' |         // Task completed
+    'error' |             // Error occurred
+    'paused';             // Processing paused
 
 export interface TaskState {
     taskId: string | null;
@@ -33,4 +50,12 @@ export interface TaskState {
     isRunning: boolean;
     iterations: number;
     isPaused: boolean;
+    processingStatus?: ProcessingStatus; // Current processing step
+    lastUpdateTimestamp?: string;        // Timestamp of last successful update
+}
+
+// New type for sidebar settings
+export interface SidebarState {
+    isOpen: boolean;
+    activeTab: 'automation' | 'knowledge' | 'history' | 'settings';
 }

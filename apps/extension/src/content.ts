@@ -1,214 +1,120 @@
-import { DOMElementNode, DOMHashMap, DOMNode, parseDOMonServer } from '@navigator-ai/core';
-import { FrontendDOMState, Message } from './types';
+import { DOMElementNode, DOMHashMap, DOMNode, parseDOMonServer, Action, AutomationHandler } from '@navigator-ai/core';
+import { FrontendDOMState, Message, ProcessingStatus } from './types';
 
 console.log('Content script loaded');
 
-// Function to create the extension container
-function createExtensionContainer() {
-    console.log('Creating extension container');
+let sidebarContainer: HTMLElement | null = null;
+
+// Function to create the extension container as a sidebar
+function createSidebarContainer() {
+    console.log('Creating sidebar container');
 
     // Check if container already exists
-    let container = document.getElementById('browser-automation-extension');
+    let container = document.getElementById('navigator-ai-sidebar');
     if (container) {
-        console.log('Container already exists');
-        container.style.display = 'block';
+        console.log('Sidebar container already exists');
         return container;
     }
 
-    // Create container for the extension
+    // Create container for the sidebar
     container = document.createElement('div');
-    container.id = 'browser-automation-extension';
+    container.id = 'navigator-ai-sidebar';
 
-    // Only set these essential properties directly on the container
+    // Set essential properties
     container.style.position = 'fixed';
-    container.style.bottom = '20px';
-    container.style.right = '20px';
-    container.style.zIndex = '9999999'; // Still high but not maximum
-    container.style.pointerEvents = 'none'; // Important! Allow clicks to pass through
-    container.style.transition = 'all 0.3s ease';
+    container.style.top = '0';
+    container.style.right = '0';
+    container.style.width = '0'; // Start with zero width
+    container.style.height = '100%';
+    container.style.zIndex = '9999999';
+    container.style.transition = 'width 0.3s ease';
+    container.style.overflow = 'hidden';
 
-    // Create a shadow root - this isolates our CSS
+    // Create a shadow root to isolate our CSS
     const shadow = container.attachShadow({ mode: 'closed' });
-
-    // Create a wrapper inside the shadow DOM that will catch pointer events
-    const wrapper = document.createElement('div');
-    wrapper.className = 'extension-wrapper';
-    wrapper.style.pointerEvents = 'auto';
-    wrapper.style.position = 'relative';
 
     // Create styles for shadow DOM
     const style = document.createElement('style');
     style.textContent = `
-        .extension-wrapper {
-            width: 400px;
-            height: auto;
-            max-height: 550px;
-            background-color: transparent !important;
+        :host {
+            color-scheme: light dark;
         }
+        
         iframe {
             width: 100%;
-            height: 550px;
+            height: 100%;
             border: none;
-            border-radius: 8px;
-            box-shadow: none !important;
             background-color: transparent !important;
-            color-scheme: gjfdk fjskl;
-            opacity: 0.98;
         }
-        .drag-handle {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 30px;
-            cursor: move;
-            z-index: 1;
+        
+        .sidebar-open {
+            width: 384px !important; /* 96 * 4 = 384px for w-96 in Tailwind */
+        }
+        
+        .sidebar-closed {
+            width: 0 !important;
         }
     `;
 
-    // Create iframe
+    // Create iframe to hold the sidebar content
     const iframe = document.createElement('iframe');
     iframe.src = chrome.runtime.getURL('popup.html');
     iframe.style.backgroundColor = 'transparent';
-    iframe.style.backdropFilter = 'none';
-    // iframe.style.webkitBackdropFilter = 'none';
     iframe.style.opacity = '0.98';
     iframe.allow = 'autoplay';
 
-    // Create drag handle
-    const dragHandle = document.createElement('div');
-    dragHandle.className = 'drag-handle';
-
     // Add elements to shadow DOM
     shadow.appendChild(style);
-    shadow.appendChild(wrapper);
-    wrapper.appendChild(iframe);
-    wrapper.appendChild(dragHandle);
+    shadow.appendChild(iframe);
 
     // Add container to document body
     document.body.appendChild(container);
 
-    // Make draggable
-    initDraggable(container, dragHandle);
+    // Store for later use
+    sidebarContainer = container;
 
     return container;
 }
 
-// Initialize draggable functionality
-function initDraggable(container: HTMLElement, dragHandle: HTMLElement) {
-    let isDragging = false;
-    let initialX: number;
-    let initialY: number;
-    let startPositionX: number;
-    let startPositionY: number;
+// Function to update sidebar visibility state
+function updateSidebarState(isOpen: boolean) {
+    console.log('Updating sidebar state:', isOpen);
 
-    // Store position in local storage
-    function savePosition(x: number, y: number) {
-        localStorage.setItem('popupPosition', JSON.stringify({ left: x, top: y }));
+    if (!sidebarContainer) {
+        sidebarContainer = createSidebarContainer();
     }
 
-    function loadPosition() {
-        try {
-            const position = localStorage.getItem('popupPosition');
-            if (position) {
-                const { left, top } = JSON.parse(position);
-                container.style.left = left + 'px';
-                container.style.top = top + 'px';
-                container.style.right = 'auto';
-                container.style.bottom = 'auto';
-            }
-        } catch (e) {
-            console.error('Error loading position:', e);
-        }
-    }
-
-    // Set initial position from storage or default
-    loadPosition();
-
-    // Handle mousedown event to start drag
-    dragHandle.addEventListener('mousedown', (e) => {
-        // Only handle left mouse button
-        if (e.button !== 0) return;
-
-        // Check if the element has the drag-handle class
-        // This ensures dragging only works when minimized
-        if (!dragHandle.classList.contains('drag-handle')) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        // Get current container position
-        const style = window.getComputedStyle(container);
-        startPositionX = parseInt(style.left, 10) || 0;
-        startPositionY = parseInt(style.top, 10) || 0;
-
-        // Calculate offset from mouse to container corner
-        initialX = e.clientX - startPositionX;
-        initialY = e.clientY - startPositionY;
-
-        isDragging = true;
-        container.classList.add('dragging');
-
-        // Add document-wide event listeners
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.addEventListener('mouseleave', onMouseUp);
-    });
-
-    function onMouseMove(e: MouseEvent) {
-        if (!isDragging) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        // Calculate new position
-        const x = e.clientX - initialX;
-        const y = e.clientY - initialY;
-
-        // Constrain to viewport
-        const maxX = window.innerWidth - container.offsetWidth;
-        const maxY = window.innerHeight - container.offsetHeight;
-        const newX = Math.max(0, Math.min(x, maxX));
-        const newY = Math.max(0, Math.min(y, maxY));
-
-        // Set the new position directly
-        container.style.left = `${newX}px`;
-        container.style.top = `${newY}px`;
-        container.style.right = 'auto';
-        container.style.bottom = 'auto';
-    }
-
-    function onMouseUp(e: MouseEvent) {
-        if (!isDragging) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        isDragging = false;
-        container.classList.remove('dragging');
-
-        // Save the final position
-        const style = window.getComputedStyle(container);
-        const finalX = parseInt(style.left, 10);
-        const finalY = parseInt(style.top, 10);
-        savePosition(finalX, finalY);
-
-        // Clean up event listeners
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.removeEventListener('mouseleave', onMouseUp);
+    if (isOpen) {
+        sidebarContainer.style.width = '384px'; // w-96 in Tailwind
+        sidebarContainer.classList.add('sidebar-open');
+        sidebarContainer.classList.remove('sidebar-closed');
+    } else {
+        sidebarContainer.style.width = '0';
+        sidebarContainer.classList.add('sidebar-closed');
+        sidebarContainer.classList.remove('sidebar-open');
     }
 }
 
-// Process DOM and send data to background script
+// Toggle sidebar visibility
+function toggleSidebar() {
+    console.log('Toggling sidebar');
+
+    if (!sidebarContainer) {
+        sidebarContainer = createSidebarContainer();
+    }
+
+    const isCurrentlyOpen = sidebarContainer.classList.contains('sidebar-open');
+    updateSidebarState(!isCurrentlyOpen);
+
+    return !isCurrentlyOpen;
+}
+
 async function processDOM(task_id: string): Promise<FrontendDOMState> {
     try {
         console.log('Processing DOM for task:', task_id);
 
-        // Get the HTML content
         const htmlContent = document.documentElement.outerHTML;
 
-        // Parse the DOM on the server instead of locally
         console.log('Sending HTML to server for parsing...');
         const domStructure = await parseDOMonServer(htmlContent);
         console.log('Received parsed DOM structure from server');
@@ -222,74 +128,58 @@ async function processDOM(task_id: string): Promise<FrontendDOMState> {
         };
 
         console.log('Highlighting interactive elements');
-        highlighInteractiveElements(domStructure);
+        highlightInteractiveElements(domStructure);
 
         console.log('Sending DOM update to background, structure size:',
             JSON.stringify(domData.structure).length, 'bytes');
 
-        // Send data back to background script
-        chrome.runtime.sendMessage({
-            type: 'dom_update',
-            task_id,
-            dom_data: domData,
-            result: []
-        }, response => {
-            console.log('Background script response:', response);
+        // Send data to background script and wait for complete response including any actions
+        return new Promise<FrontendDOMState>((resolve, reject) => {
+            chrome.runtime.sendMessage({
+                type: 'dom_update',
+                task_id,
+                dom_data: domData,
+                result: []
+            }, async response => {
+                console.log('Background script response from DOM update:', response);
+                
+                if (response && response.data) {
+                    // Check if there are actions to execute and wait for them to complete
+                    if (response.data.result?.actions && response.data.result.actions.length > 0) {
+                        console.log('Waiting for actions to complete...');
+                        try {
+                            // Wait for actions from the update response to complete
+                            // before resolving the processDOM promise
+                            const actionResults = await handleAutomationActions(response.data.result.actions);
+                            console.log('Action execution results:', actionResults);
+                            
+                            // Only resolve after actions are complete
+                            resolve(domData);
+                        } catch (actionError) {
+                            console.error('Error executing actions:', actionError);
+                            reject(new Error('Failed to execute actions: ' + (actionError as Error).message));
+                        }
+                    } else {
+                        // No actions to execute, resolve immediately
+                        resolve(domData);
+                    }
+                } else if (response && response.success) {
+                    resolve(domData);
+                } else {
+                    reject(new Error('Failed to update DOM: ' + (response?.error || 'Unknown error')));
+                }
+            });
         });
-
-        return domData;
     } catch (error) {
         console.error('Error processing DOM:', error);
         throw error;
     }
 }
 
-// Toggle UI visibility
-function toggleUI() {
-    console.log('Toggling UI');
-    const container = createExtensionContainer();
+function highlightInteractiveElements(domStructure: DOMHashMap) {
+    // Clear previous highlights first
+    clearAllHighlights();
 
-    // Check current state
-    const isHidden = container.style.display === 'none';
-
-    if (isHidden) {
-        container.style.display = 'block';
-    } else {
-        container.style.display = 'none';
-    }
-
-    return !isHidden;
-}
-
-// Listen for messages from the background script
-chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
-    console.log('Content script received message:', message);
-
-    if (message.type === 'processDOM' && message.task_id) {
-        createExtensionContainer(); // Ensure container exists
-        processDOM(message.task_id)
-            .then(() => {
-                if (sendResponse) sendResponse({ success: true });
-            })
-            .catch(error => {
-                console.error('Error in processDOM:', error);
-                if (sendResponse) sendResponse({ success: false, error: error.message });
-            });
-        return true; // Keep channel open for async response
-    }
-    else if (message.type === 'toggleUI') {
-        const isVisible = toggleUI();
-        if (sendResponse) sendResponse({ success: true, isVisible });
-    }
-
-    return true; // Keep channel open for async response
-});
-
-// Initialize on content script load
-console.log('Creating UI container on content script load');
-createExtensionContainer();
-
-function highlighInteractiveElements(domStructure: DOMHashMap) {
     const interactiveElements = Object.values(domStructure).filter((node) => {
         if (!node.isVisible) {
             return false;
@@ -304,26 +194,488 @@ function highlighInteractiveElements(domStructure: DOMHashMap) {
     // highlight interactive elements by adding style and color to the dom by accessing element using xpath
     interactiveElements.forEach((element: DOMNode, index: number) => {
         const xpath = (element as DOMElementNode).xpath;
-        const highlightedElement = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue as HTMLElement;
-        if (highlightedElement && highlightedElement instanceof HTMLElement) {
-            highlightedElement.style.border = `2px solid ${colors[index % colors.length]}`;
-        } else {
-            console.error('highlightedElement is not an HTMLElement:', highlightedElement);
+        try {
+            const highlightedElement = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue as HTMLElement;
+            if (highlightedElement && highlightedElement instanceof HTMLElement) {
+                highlightedElement.style.outline = `2px solid ${colors[index % colors.length]}`;
+                highlightedElement.style.outlineOffset = '2px';
+                highlightedElement.classList.add('navigator-ai-highlight');
+            }
+        } catch (error) {
+            console.error('Error highlighting element:', error);
         }
     });
 }
 
+// Function to clear all highlights
+function clearAllHighlights() {
+    const highlightedElements = document.querySelectorAll('.navigator-ai-highlight');
+    highlightedElements.forEach((el) => {
+        if (el instanceof HTMLElement) {
+            el.style.outline = '';
+            el.style.outlineOffset = '';
+            el.classList.remove('navigator-ai-highlight');
+        }
+    });
+}
+
+// Initialize automation handler
+const automationHandler = new AutomationHandler();
+
+// New function to process DOM sequentially
+async function sequentialDOMProcessing(task_id: string, maxIterations = 10) {
+    // Always start with 0 iterations when workflow starts
+    let iteration = 0;
+    let isDone = false;
+    
+    console.log('Starting sequential DOM processing for task:', task_id);
+    
+    // Notify background script to reset iteration counter
+    await new Promise<void>((resolve) => {
+        chrome.runtime.sendMessage({
+            type: 'resetIterations',
+            task_id
+        }, () => {
+            resolve();
+        });
+    });
+    
+    while (!isDone && iteration < maxIterations) {
+        console.log(`Starting iteration ${iteration + 1} of DOM processing`);
+        
+        try {
+            // Step 1: Parse and update DOM, which now also waits for any actions to complete
+            // This ensures the entire process is sequential
+            await processDOM(task_id);
+            
+            // Increment iteration counter after processing is complete
+            iteration++;
+            
+            // Step 2: Check if processing is done
+            // After actions have completed, check if the task is marked as done
+            isDone = await checkIfProcessingDone(task_id);
+            
+            console.log(`Iteration ${iteration} complete. isDone:`, isDone);
+            
+            // Add a small delay between iterations to avoid overwhelming the system
+            if (!isDone && iteration < maxIterations) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        } catch (error) {
+            console.error(`Error in iteration ${iteration + 1}:`, error);
+            break;
+        }
+    }
+    
+    console.log(`Sequential DOM processing complete after ${iteration} iterations`);
+    return { success: true, iterations: iteration, isDone };
+}
+
+// Function to check if processing is done
+function checkIfProcessingDone(task_id: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+            type: 'check_processing_status',
+            task_id
+        }, response => {
+            console.log('Processing status check response:', response);
+            
+            // Check if the response has the isDone property
+            if (response && typeof response.isDone === 'boolean') {
+                resolve(response.isDone);
+            } else {
+                // If the server didn't explicitly say it's done, check active session status
+                chrome.storage.local.get(['activeSession'], (result) => {
+                    const isDone = result.activeSession?.status === 'completed';
+                    console.log('Checking active session status for completion:', isDone);
+                    resolve(isDone);
+                });
+            }
+        });
+    });
+}
+
+// Helper function to wait for a specific processing status
+async function waitForProcessingStatus(task_id: string, targetStatus: ProcessingStatus, timeoutMs = 60000): Promise<boolean> {
+    const startTime = Date.now();
+    let statusCheckCount = 0;
+    
+    return new Promise<boolean>((resolve) => {
+        // Set a timeout to avoid hanging forever
+        const timeoutId = setTimeout(() => {
+            console.warn(`Waiting for status ${targetStatus} timed out after ${timeoutMs}ms`);
+            // Force status to completed if we're waiting for completed status and timing out
+            if (targetStatus === 'completed') {
+                console.warn('Forcing status to completed to avoid being stuck');
+                chrome.runtime.sendMessage({
+                    type: 'updateProcessingStatus',
+                    task_id,
+                    status: 'completed'
+                }).catch(err => console.error('Error forcing status update:', err));
+            }
+            resolve(false);
+        }, timeoutMs);
+        
+        // Check status periodically
+        const checkStatus = async () => {
+            statusCheckCount++;
+            const result = await chrome.storage.local.get(['taskState']);
+            const currentStatus = result.taskState?.processingStatus;
+            
+            console.log(`Current processing status: ${currentStatus}, waiting for: ${targetStatus} (check #${statusCheckCount})`);
+            
+            if (currentStatus === targetStatus) {
+                clearTimeout(timeoutId);
+                resolve(true);
+                return;
+            }
+            
+            // If error status, stop waiting
+            if (currentStatus === 'error') {
+                clearTimeout(timeoutId);
+                console.error('Processing status shows error, stopping wait');
+                resolve(false);
+                return;
+            }
+            
+            // If waiting for completion and stuck in executing_actions for too long, force completion
+            if (targetStatus === 'completed' && currentStatus === 'executing_actions' && statusCheckCount > 10) {
+                clearTimeout(timeoutId);
+                console.warn('Execution taking too long, forcing completion status');
+                await chrome.runtime.sendMessage({
+                    type: 'updateProcessingStatus',
+                    task_id,
+                    status: 'completed'
+                }).catch(err => console.error('Error forcing status update:', err));
+                resolve(true);
+                return;
+            }
+            
+            // If we've waited too long, stop
+            if (Date.now() - startTime > timeoutMs - 5000) { // Leave 5s buffer for timeout
+                clearTimeout(timeoutId);
+                console.warn(`Waiting for status ${targetStatus} timed out after ${Date.now() - startTime}ms`);
+                resolve(false);
+                return;
+            }
+            
+            // Check again after a delay
+            setTimeout(checkStatus, 500);
+        };
+        
+        // Start checking
+        checkStatus();
+    });
+}
+
+// Helper to get the latest server update from storage
+async function getLatestUpdateResult(task_id: string): Promise<any> {
+    const result = await chrome.storage.local.get(['currentDOMUpdate', 'lastUpdateResponse']);
+    
+    if (result.currentDOMUpdate?.task_id === task_id && result.currentDOMUpdate?.status === 'completed') {
+        return {
+            success: true,
+            data: result.currentDOMUpdate.result
+        };
+    } else if (result.lastUpdateResponse?.task_id === task_id) {
+        return {
+            success: true,
+            data: result.lastUpdateResponse.data
+        };
+    }
+    
+    return {
+        success: false,
+        error: 'No update result found'
+    };
+}
+
+// New function for reliable single DOM process iteration using storage for state management
+async function singleDOMProcessIteration(task_id: string): Promise<{ 
+    success: boolean; 
+    error?: string;
+    isDone?: boolean;
+}> {
+    try {
+        console.log('Starting single DOM process iteration for task:', task_id);
+        
+        // Step 1: Get HTML and parse DOM
+        const htmlContent = document.documentElement.outerHTML;
+        console.log('Sending HTML to server for parsing...');
+        
+        // Parse DOM data
+        const domStructure = await parseDOMonServer(htmlContent);
+        console.log('Received parsed DOM structure from server');
+        
+        // Create DOM data object
+        const domData: FrontendDOMState = {
+            url: window.location.href,
+            html: htmlContent,
+            title: document.title,
+            timestamp: new Date().toISOString(),
+            structure: domStructure
+        };
+        
+        // Apply highlight to interactive elements
+        console.log('Highlighting interactive elements');
+        highlightInteractiveElements(domStructure);
+        
+        // Step 2: Start DOM update but don't wait for message response
+        console.log('Sending DOM update to server via background script');
+        
+        // Just trigger the DOM update, don't wait for direct response 
+        chrome.runtime.sendMessage({
+            type: 'dom_update',
+            task_id,
+            dom_data: domData,
+            result: []
+        });
+        
+        // Instead of relying on message response, wait for the processing status to change
+        console.log('Waiting for DOM update to complete...');
+        const waitForStatus = await waitForProcessingStatus(task_id, 'completed', 120000);
+        
+        if (!waitForStatus) {
+            // If completion never happened, check if there's an error status
+            const taskState = await chrome.storage.local.get(['taskState']);
+            if (taskState.taskState?.processingStatus === 'error') {
+                return { success: false, error: 'DOM update failed with error' };
+            }
+            
+            return { success: false, error: 'DOM update timed out waiting for completion' };
+        }
+        
+        // Get the update result from storage
+        const updateResult = await getLatestUpdateResult(task_id);
+        
+        if (!updateResult.success) {
+            console.error('Failed to get update result:', updateResult.error);
+            return { success: false, error: updateResult.error };
+        }
+        
+        console.log('DOM update successful:', updateResult);
+        
+        // Step 3: Handle any actions returned from the server
+        if (updateResult.data?.result?.actions?.length > 0) {
+            console.log('Executing actions from update response');
+            const actions = updateResult.data.result.actions;
+            
+            try {
+                // Mark status as executing actions
+                await chrome.runtime.sendMessage({
+                    type: 'updateProcessingStatus',
+                    task_id,
+                    status: 'executing_actions'
+                });
+                
+                const actionResults = await handleAutomationActions(actions);
+                console.log('Action execution results:', actionResults);
+                
+                // Mark status as completed after actions are done
+                await chrome.runtime.sendMessage({
+                    type: 'updateProcessingStatus',
+                    task_id,
+                    status: 'completed'
+                });
+            } catch (actionError) {
+                console.error('Error executing actions:', actionError);
+                
+                // Mark status as error if actions failed
+                await chrome.runtime.sendMessage({
+                    type: 'updateProcessingStatus',
+                    task_id,
+                    status: 'error'
+                });
+                
+                return { 
+                    success: false, 
+                    error: actionError instanceof Error ? actionError.message : String(actionError)
+                };
+            }
+        } else {
+            // Explicitly mark as completed if no actions needed
+            await chrome.runtime.sendMessage({
+                type: 'updateProcessingStatus',
+                task_id,
+                status: 'completed'
+            });
+        }
+        
+        // Step 4: Check if task is done
+        const isDone = !!updateResult.data?.result?.is_done;
+        console.log('Is this iteration the final one?', isDone);
+        
+        return { 
+            success: true,
+            isDone
+        };
+    } catch (error) {
+        console.error('Error in single DOM process iteration:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : String(error)
+        };
+    }
+}
+
+// Handle messages from background script
+chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
+    console.log('Content script received message:', message.type);
+
+    // Simple ping to check if content script is loaded
+    if (message.type === 'ping') {
+        sendResponse({ success: true });
+        return true;
+    }
+    
+    // Process a single DOM iteration fully (parse + update + actions)
+    if (message.type === 'singleDOMProcess' && message.task_id) {
+        createSidebarContainer(); // Ensure container exists
+        
+        // This processes a single iteration completely and reliably
+        singleDOMProcessIteration(message.task_id)
+            .then((result) => {
+                console.log('Single DOM process complete:', result);
+                sendResponse(result);
+            })
+            .catch(error => {
+                console.error('Error in singleDOMProcess:', error);
+                sendResponse({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            });
+        
+        return true; // Keep channel open for async response
+    }
+
+    if (message.type === 'executeActions' && Array.isArray(message.actions)) {
+        handleAutomationActions(message.actions)
+            .then(results => {
+                sendResponse({ success: true, results });
+            })
+            .catch(error => {
+                console.error('Error executing actions:', error);
+                sendResponse({ success: false, error: error.message });
+            });
+        return true; // Keep channel open for async response
+    }
+
+    if (message.type === 'processDOM' && message.task_id) {
+        createSidebarContainer(); // Ensure container exists
+        processDOM(message.task_id)
+            .then((domData) => {
+                sendResponse({ success: true, domData });
+            })
+            .catch(error => {
+                console.error('Error in processDOM:', error);
+                sendResponse({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            });
+        return true; // Keep channel open for async response
+    }
+    else if (message.type === 'startSequentialProcessing' && message.task_id) {
+        createSidebarContainer(); // Ensure container exists
+        sequentialDOMProcessing(message.task_id, message.maxIterations || 10)
+            .then((result) => {
+                sendResponse({ success: true, result });
+            })
+            .catch(error => {
+                console.error('Error in sequential processing:', error);
+                sendResponse({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error)
+                });
+            });
+        return true; // Keep channel open for async response
+    }
+    else if (message.type === 'toggleUI' || message.type === 'toggleSidebar') {
+        const isVisible = toggleSidebar();
+        sendResponse({ success: true, isVisible });
+        return true;
+    }
+    else if (message.type === 'updateSidebarState') {
+        updateSidebarState(message.isOpen || false);
+        sendResponse({ success: true });
+        return true;
+    }
+
+    // If we reach here, it was an unknown message type
+    return false;
+});
+
+async function handleAutomationActions(actions: Action[]) {
+    try {
+        console.log('Executing automation actions:', actions);
+        
+        // Validate actions
+        if (!Array.isArray(actions) || actions.length === 0) {
+            console.error('Invalid actions array:', actions);
+            throw new Error('Invalid actions array');
+        }
+        
+        // Validate each action
+        for (const action of actions) {
+            if (!action.type) {
+                console.error('Invalid action missing type:', action);
+                throw new Error('Invalid action: missing type');
+            }
+            
+            // Validate based on action type
+            if (action.type === 'click' || action.type === 'scroll' || action.type === 'input') {
+                if (!action.element_id && !action.xpath_ref && !action.selector) {
+                    console.error('Invalid action missing target element:', action);
+                    throw new Error(`Invalid ${action.type} action: missing target element`);
+                }
+            }
+            
+            if (action.type === 'input' && !action.text) {
+                console.error('Invalid input action missing text:', action);
+                throw new Error('Invalid input action: missing text');
+            }
+            
+            if (action.type === 'navigate' && !action.url) {
+                console.error('Invalid navigate action missing URL:', action);
+                throw new Error('Invalid navigate action: missing URL');
+            }
+        }
+        
+        // Execute actions with timeout protection - longer timeout (120 seconds)
+        const timeoutPromise = new Promise<boolean[]>((_, reject) => {
+            setTimeout(() => {
+                reject(new Error('Action execution timed out after 120 seconds'));
+            }, 120000); // 2 minutes timeout
+        });
+        
+        // Race between execution and timeout
+        const results = await Promise.race([
+            automationHandler.executeActions(actions),
+            timeoutPromise
+        ]);
+        
+        console.log('Action execution complete with results:', results);
+        
+        // Check if any action failed
+        if (results.includes(false)) {
+            const failedIndex = results.findIndex(r => r === false);
+            console.warn(`Action at index ${failedIndex} failed:`, actions[failedIndex]);
+        }
+        
+        return results;
+    } catch (error) {
+        console.error('Error in handleAutomationActions:', error);
+        throw error; // Re-throw for proper error handling upstream
+    }
+}
+
+// Initialize on content script load
+console.log('Creating sidebar container on content script load');
+createSidebarContainer();
+
 const colors = [
-    "#FF0000",
-    "#00FF00",
-    "#0000FF",
-    "#FFA500",
-    "#800080",
-    "#008080",
-    "#FF69B4",
-    "#4B0082",
-    "#FF4500",
-    "#2E8B57",
-    "#DC143C",
-    "#4682B4",
+    "#FF0000", "#00FF00", "#0000FF", "#FFA500",
+    "#800080", "#008080", "#FF69B4", "#4B0082",
+    "#FF4500", "#2E8B57", "#DC143C", "#4682B4",
 ];

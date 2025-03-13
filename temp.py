@@ -49,7 +49,7 @@ def write_extension_code_to_file(extension_dir, output_file):
 if __name__ == "__main__":
     # Specify the extension directory and output file
     # Adjust this path to match your project structure
-    extension_dir = "./"
+    extension_dir = "./apps/extension"
     output_file = "full_code.txt"
 
     write_extension_code_to_file(extension_dir, output_file)
