@@ -4,7 +4,7 @@ import type { TaskState } from '../types';
 type Tab = 'automation' | 'knowledge' | 'history' | 'settings';
 
 export default function Sidebar() {
-    const [isOpen, setIsOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(true);
     const [activeTab, setActiveTab] = useState<Tab>('automation');
     const [state, setState] = useState<TaskState>({
         taskId: null,
@@ -18,7 +18,6 @@ export default function Sidebar() {
     useEffect(() => {
         console.log('Sidebar component mounted');
 
-        // Load state from storage
         chrome.storage.local.get(['taskState', 'sidebarOpen', 'activeTab', 'activeSession'], (result) => {
             console.log('Loaded from storage:', result);
 
@@ -26,17 +25,12 @@ export default function Sidebar() {
                 setState(result.taskState);
             }
 
-            // Load sidebar state
             if (result.sidebarOpen !== undefined) {
                 setIsOpen(result.sidebarOpen);
             }
-
-            // Load active tab
             if (result.activeTab) {
                 setActiveTab(result.activeTab as Tab);
             }
-
-            // If there's an active session, update the state
             if (result.activeSession?.taskId) {
                 setState(prev => ({
                     ...prev,
@@ -50,7 +44,6 @@ export default function Sidebar() {
             }
         });
 
-        // Add message listener for updates
         const messageListener = (message: { type: string; iterations?: number; stopMonitoring?: boolean; pauseStateChanged?: boolean; isPaused?: boolean; status?: string }) => {
             if (message.type === 'iterationUpdate') {
                 setState(prev => ({
@@ -64,7 +57,6 @@ export default function Sidebar() {
                     isRunning: false
                 }));
 
-                // Update storage
                 chrome.storage.local.set({
                     taskState: {
                         ...state,
@@ -83,20 +75,16 @@ export default function Sidebar() {
 
         chrome.runtime.onMessage.addListener(messageListener);
 
-        // Apply transparent background
         document.body.style.background = 'transparent';
 
-        // Cleanup listener on unmount
         return () => {
             chrome.runtime.onMessage.removeListener(messageListener);
         };
     }, []);
 
-    // Save sidebar state when it changes
     useEffect(() => {
         chrome.storage.local.set({ sidebarOpen: isOpen });
-        
-        // Communicate state to content script for resizing
+
         if (typeof chrome !== 'undefined' && chrome.tabs) {
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                 if (tabs[0] && tabs[0].id) {
@@ -111,12 +99,10 @@ export default function Sidebar() {
         }
     }, [isOpen]);
 
-    // Save active tab
     useEffect(() => {
         chrome.storage.local.set({ activeTab });
     }, [activeTab]);
 
-    // Task handlers
     const handleStartTask = async () => {
         if (!state.task.trim()) return;
 
@@ -156,14 +142,14 @@ export default function Sidebar() {
             console.log('Stopping task...');
             setState(prev => ({ ...prev, status: 'idle' }));
             chrome.runtime.sendMessage({ type: 'stopMonitoring' });
-            
+
             const newState: TaskState = {
                 ...state,
                 status: 'idle',
                 isRunning: false,
                 isPaused: false
             };
-            
+
             await chrome.storage.local.set({ taskState: newState });
             setState(newState);
         } catch (error) {
@@ -179,7 +165,7 @@ export default function Sidebar() {
                 status: 'paused',
                 isPaused: true
             };
-            
+
             await chrome.storage.local.set({ taskState: newState });
             setState(newState);
             chrome.runtime.sendMessage({ type: 'pauseMonitoring' });
@@ -196,7 +182,7 @@ export default function Sidebar() {
                 status: 'running',
                 isPaused: false
             };
-            
+
             await chrome.storage.local.set({ taskState: newState });
             setState(newState);
             chrome.runtime.sendMessage({ type: 'resumeMonitoring' });
@@ -205,7 +191,6 @@ export default function Sidebar() {
         }
     };
 
-    // Status badge color
     const getStatusColor = () => {
         switch (state.status) {
             case 'running': return 'bg-green-500';
@@ -217,7 +202,6 @@ export default function Sidebar() {
         }
     };
 
-    // Status text
     const getStatusText = () => {
         switch (state.status) {
             case 'running': return 'Running';
@@ -229,7 +213,6 @@ export default function Sidebar() {
         }
     };
 
-    // Toggle button for collapsed state
     if (!isOpen) {
         return (
             <div className="fixed top-20 right-0 z-50 flex flex-col gap-2">
@@ -248,12 +231,11 @@ export default function Sidebar() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                 </button>
-                
+
                 {state.isRunning && (
-                    <div 
-                        className={`w-12 h-12 flex items-center justify-center rounded-l-lg border border-slate-700/50 border-r-0 shadow-lg ${
-                            state.isPaused ? 'bg-orange-600/90' : 'bg-green-600/90'
-                        }`}
+                    <div
+                        className={`w-12 h-12 flex items-center justify-center rounded-l-lg border border-slate-700/50 border-r-0 shadow-lg ${state.isPaused ? 'bg-orange-600/90' : 'bg-green-600/90'
+                            }`}
                         title={state.isPaused ? 'Task Paused' : 'Task Running'}
                     >
                         {state.isPaused ? (
@@ -297,41 +279,37 @@ export default function Sidebar() {
                 <div className="flex border-b border-slate-600/90">
                     <button
                         onClick={() => setActiveTab('automation')}
-                        className={`flex-1 py-3 text-center font-medium transition-colors ${
-                            activeTab === 'automation' 
-                                ? 'text-white border-b-2 border-blue-500' 
-                                : 'text-slate-400 hover:text-slate-200'
-                        }`}
+                        className={`flex-1 py-3 text-center font-medium transition-colors ${activeTab === 'automation'
+                            ? 'text-white border-b-2 border-blue-500'
+                            : 'text-slate-400 hover:text-slate-200'
+                            }`}
                     >
                         Automation
                     </button>
                     <button
                         onClick={() => setActiveTab('knowledge')}
-                        className={`flex-1 py-3 text-center font-medium transition-colors ${
-                            activeTab === 'knowledge' 
-                                ? 'text-white border-b-2 border-blue-500' 
-                                : 'text-slate-400 hover:text-slate-200'
-                        }`}
+                        className={`flex-1 py-3 text-center font-medium transition-colors ${activeTab === 'knowledge'
+                            ? 'text-white border-b-2 border-blue-500'
+                            : 'text-slate-400 hover:text-slate-200'
+                            }`}
                     >
                         Knowledge
                     </button>
                     <button
                         onClick={() => setActiveTab('history')}
-                        className={`flex-1 py-3 text-center font-medium transition-colors ${
-                            activeTab === 'history' 
-                                ? 'text-white border-b-2 border-blue-500' 
-                                : 'text-slate-400 hover:text-slate-200'
-                        }`}
+                        className={`flex-1 py-3 text-center font-medium transition-colors ${activeTab === 'history'
+                            ? 'text-white border-b-2 border-blue-500'
+                            : 'text-slate-400 hover:text-slate-200'
+                            }`}
                     >
                         History
                     </button>
                     <button
                         onClick={() => setActiveTab('settings')}
-                        className={`flex-1 py-3 text-center font-medium transition-colors ${
-                            activeTab === 'settings' 
-                                ? 'text-white border-b-2 border-blue-500' 
-                                : 'text-slate-400 hover:text-slate-200'
-                        }`}
+                        className={`flex-1 py-3 text-center font-medium transition-colors ${activeTab === 'settings'
+                            ? 'text-white border-b-2 border-blue-500'
+                            : 'text-slate-400 hover:text-slate-200'
+                            }`}
                     >
                         Settings
                     </button>
@@ -450,7 +428,7 @@ export default function Sidebar() {
                         <div className="space-y-5">
                             <h3 className="text-lg font-medium text-slate-200">Knowledge Base</h3>
                             <p className="text-slate-400">Upload custom files and videos to enhance the AI's understanding.</p>
-                            
+
                             <div className="border-2 border-dashed border-slate-600/90 rounded-lg p-8 text-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-slate-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" />
@@ -464,7 +442,7 @@ export default function Sidebar() {
                                     Supports PDF, TXT, DOCX, MP4, and more
                                 </p>
                             </div>
-                            
+
                             <div className="mt-6">
                                 <h4 className="text-md font-medium text-slate-300 mb-3">Uploaded Files</h4>
                                 <p className="text-slate-400 text-sm italic">No files uploaded yet</p>
@@ -476,7 +454,7 @@ export default function Sidebar() {
                         <div className="space-y-5">
                             <h3 className="text-lg font-medium text-slate-200">Automation History</h3>
                             <p className="text-slate-400">View your past automation runs and their results.</p>
-                            
+
                             <div className="bg-slate-700/80 rounded-lg border border-slate-600/90 overflow-hidden">
                                 <div className="p-4 text-center text-slate-400 italic">
                                     No automation history yet
@@ -488,17 +466,17 @@ export default function Sidebar() {
                     {activeTab === 'settings' && (
                         <div className="space-y-5">
                             <h3 className="text-lg font-medium text-slate-200">Settings</h3>
-                            
+
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <span className="text-slate-300">API Endpoint</span>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         className="w-48 px-3 py-2 bg-slate-700/80 border border-slate-600/90 rounded-md text-white text-sm"
                                         defaultValue="http://localhost:8000"
                                     />
                                 </div>
-                                
+
                                 <div className="flex items-center justify-between">
                                     <span className="text-slate-300">Theme</span>
                                     <select className="w-48 px-3 py-2 bg-slate-700/80 border border-slate-600/90 rounded-md text-white text-sm">
@@ -507,7 +485,7 @@ export default function Sidebar() {
                                         <option>System</option>
                                     </select>
                                 </div>
-                                
+
                                 <div className="flex items-center justify-between">
                                     <span className="text-slate-300">Default Tab</span>
                                     <select className="w-48 px-3 py-2 bg-slate-700/80 border border-slate-600/90 rounded-md text-white text-sm">
@@ -517,7 +495,7 @@ export default function Sidebar() {
                                         <option>Settings</option>
                                     </select>
                                 </div>
-                                
+
                                 <div className="pt-4 border-t border-slate-600/80">
                                     <button className="px-4 py-2 text-white bg-blue-600/90 hover:bg-blue-700/90 rounded-md shadow-sm text-sm">
                                         Save Settings
@@ -527,8 +505,7 @@ export default function Sidebar() {
                         </div>
                     )}
                 </div>
-                
-                {/* Footer with app version */}
+
                 <div className="bg-slate-700/80 px-5 py-3 text-center text-xs text-slate-400 border-t border-slate-600/90">
                     Navigator AI v1.0.0 • Built with 💙
                 </div>
