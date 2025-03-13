@@ -298,20 +298,31 @@ function checkIfProcessingDone(task_id: string): Promise<boolean> {
 // Helper function to wait for a specific processing status
 async function waitForProcessingStatus(task_id: string, targetStatus: ProcessingStatus, timeoutMs = 60000): Promise<boolean> {
     const startTime = Date.now();
+    let statusCheckCount = 0;
     
     return new Promise<boolean>((resolve) => {
         // Set a timeout to avoid hanging forever
         const timeoutId = setTimeout(() => {
             console.warn(`Waiting for status ${targetStatus} timed out after ${timeoutMs}ms`);
+            // Force status to completed if we're waiting for completed status and timing out
+            if (targetStatus === 'completed') {
+                console.warn('Forcing status to completed to avoid being stuck');
+                chrome.runtime.sendMessage({
+                    type: 'updateProcessingStatus',
+                    task_id,
+                    status: 'completed'
+                }).catch(err => console.error('Error forcing status update:', err));
+            }
             resolve(false);
         }, timeoutMs);
         
         // Check status periodically
         const checkStatus = async () => {
+            statusCheckCount++;
             const result = await chrome.storage.local.get(['taskState']);
             const currentStatus = result.taskState?.processingStatus;
             
-            console.log(`Current processing status: ${currentStatus}, waiting for: ${targetStatus}`);
+            console.log(`Current processing status: ${currentStatus}, waiting for: ${targetStatus} (check #${statusCheckCount})`);
             
             if (currentStatus === targetStatus) {
                 clearTimeout(timeoutId);
@@ -323,6 +334,27 @@ async function waitForProcessingStatus(task_id: string, targetStatus: Processing
             if (currentStatus === 'error') {
                 clearTimeout(timeoutId);
                 console.error('Processing status shows error, stopping wait');
+                resolve(false);
+                return;
+            }
+            
+            // If waiting for completion and stuck in executing_actions for too long, force completion
+            if (targetStatus === 'completed' && currentStatus === 'executing_actions' && statusCheckCount > 10) {
+                clearTimeout(timeoutId);
+                console.warn('Execution taking too long, forcing completion status');
+                await chrome.runtime.sendMessage({
+                    type: 'updateProcessingStatus',
+                    task_id,
+                    status: 'completed'
+                }).catch(err => console.error('Error forcing status update:', err));
+                resolve(true);
+                return;
+            }
+            
+            // If we've waited too long, stop
+            if (Date.now() - startTime > timeoutMs - 5000) { // Leave 5s buffer for timeout
+                clearTimeout(timeoutId);
+                console.warn(`Waiting for status ${targetStatus} timed out after ${Date.now() - startTime}ms`);
                 resolve(false);
                 return;
             }
@@ -575,8 +607,67 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
 });
 
 async function handleAutomationActions(actions: Action[]) {
-    console.log('Executing automation actions:', actions);
-    return await automationHandler.executeActions(actions);
+    try {
+        console.log('Executing automation actions:', actions);
+        
+        // Validate actions
+        if (!Array.isArray(actions) || actions.length === 0) {
+            console.error('Invalid actions array:', actions);
+            throw new Error('Invalid actions array');
+        }
+        
+        // Validate each action
+        for (const action of actions) {
+            if (!action.type) {
+                console.error('Invalid action missing type:', action);
+                throw new Error('Invalid action: missing type');
+            }
+            
+            // Validate based on action type
+            if (action.type === 'click' || action.type === 'scroll' || action.type === 'input') {
+                if (!action.element_id && !action.xpath_ref && !action.selector) {
+                    console.error('Invalid action missing target element:', action);
+                    throw new Error(`Invalid ${action.type} action: missing target element`);
+                }
+            }
+            
+            if (action.type === 'input' && !action.text) {
+                console.error('Invalid input action missing text:', action);
+                throw new Error('Invalid input action: missing text');
+            }
+            
+            if (action.type === 'navigate' && !action.url) {
+                console.error('Invalid navigate action missing URL:', action);
+                throw new Error('Invalid navigate action: missing URL');
+            }
+        }
+        
+        // Execute actions with timeout protection - longer timeout (120 seconds)
+        const timeoutPromise = new Promise<boolean[]>((_, reject) => {
+            setTimeout(() => {
+                reject(new Error('Action execution timed out after 120 seconds'));
+            }, 120000); // 2 minutes timeout
+        });
+        
+        // Race between execution and timeout
+        const results = await Promise.race([
+            automationHandler.executeActions(actions),
+            timeoutPromise
+        ]);
+        
+        console.log('Action execution complete with results:', results);
+        
+        // Check if any action failed
+        if (results.includes(false)) {
+            const failedIndex = results.findIndex(r => r === false);
+            console.warn(`Action at index ${failedIndex} failed:`, actions[failedIndex]);
+        }
+        
+        return results;
+    } catch (error) {
+        console.error('Error in handleAutomationActions:', error);
+        throw error; // Re-throw for proper error handling upstream
+    }
 }
 
 // Initialize on content script load
