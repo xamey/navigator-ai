@@ -42,15 +42,11 @@ def parse_json_from_text(text):
     # Clean the text
     text = text.strip()
     
-    # Handle markdown code blocks
     if text.startswith("```json"):
-        # Remove opening markdown
         text = text[7:].strip()
     elif text.startswith("```"):
-        # Remove opening markdown
         text = text[3:].strip()
         
-    # Remove closing markdown
     if text.endswith("```"):
         text = text[:-3].strip()
     
@@ -58,7 +54,6 @@ def parse_json_from_text(text):
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        # If that fails, try to extract JSON using regex
         json_pattern = r'\{[\s\S]*\}'
         match = re.search(json_pattern, text)
         
@@ -69,7 +64,6 @@ def parse_json_from_text(text):
             except json.JSONDecodeError:
                 pass
     
-    # Return default structure if all parsing attempts fail
     return {
         "current_state": {
             "page_summary": "Failed to parse LLM output.",
