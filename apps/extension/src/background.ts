@@ -123,6 +123,14 @@ chrome.runtime.onMessage.addListener(async (message: Message, sender, sendRespon
             // Handle processing status updates from content script
             await updateProcessingStatus(message.task_id, message.status as ProcessingStatus);
             sendResponse({ success: true });
+        } else if (message.type === 'resetWorkflow') {
+            // Reset the entire workflow
+            await resetWorkflow();
+            sendResponse({ success: true });
+        } else if (message.type === 'checkDomainChange' && message.currentUrl) {
+            // Check if domain has changed and if so, stop monitoring
+            const domainChanged = await checkDomainChange(message.currentUrl);
+            sendResponse({ success: true, domainChanged });
         }
     } catch (error) {
         console.error('Error in background script:', error);
@@ -515,4 +523,116 @@ function resumeMonitoring() {
         type: 'pauseStateChanged',
         isPaused: false
     });
+}
+
+// Function to reset the entire workflow
+async function resetWorkflow() {
+    console.log('Resetting entire workflow');
+    
+    // Stop any ongoing monitoring
+    stopMonitoring();
+    
+    // Reset iteration counter
+    currentIterations = 0;
+    
+    // Reset active session
+    activeSession = null;
+    
+    // Clear all stored data
+    await chrome.storage.local.set({
+        activeSession: null,
+        taskState: null,
+        currentDOMUpdate: null,
+        lastUpdateResponse: null
+    });
+    
+    // Notify content script and UI about reset
+    chrome.runtime.sendMessage({
+        type: 'workflowReset'
+    }).catch(err => console.error('Error broadcasting workflow reset:', err));
+    
+    // Get active tab to inform content script
+    try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tabs.length > 0 && tabs[0].id && tabs[0].url && isValidUrl(tabs[0].url)) {
+            await chrome.tabs.sendMessage(tabs[0].id, { type: 'workflowReset' })
+                .catch(err => console.error('Error sending reset to content script:', err));
+        }
+    } catch (error) {
+        console.error('Error communicating reset to content script:', error);
+    }
+    
+    console.log('Workflow reset complete');
+}
+
+// Function to check if domain has changed
+async function checkDomainChange(currentUrl: string): Promise<boolean> {
+    // Extract domain from URL
+    const getDomain = (url: string) => {
+        try {
+            const urlObj = new URL(url);
+            return urlObj.hostname;
+        } catch (error) {
+            console.error('Error parsing URL:', error);
+            return url; // Return original string if parsing fails
+        }
+    };
+    
+    // Get last processed URL from storage
+    const result = await chrome.storage.local.get(['taskState']);
+    const lastProcessedUrl = result.taskState?.lastProcessedUrl || '';
+    
+    // No previous URL, store current and return false
+    if (!lastProcessedUrl) {
+        if (result.taskState) {
+            await chrome.storage.local.set({
+                taskState: {
+                    ...result.taskState,
+                    lastProcessedUrl: currentUrl
+                }
+            });
+        }
+        return false;
+    }
+    
+    // Compare domains
+    const currentDomain = getDomain(currentUrl);
+    const lastDomain = getDomain(lastProcessedUrl);
+    const domainChanged = currentDomain !== lastDomain;
+    
+    console.log('Domain check:', { currentDomain, lastDomain, domainChanged });
+    
+    // If domain changed and we have an active session, stop monitoring
+    if (domainChanged && activeSession) {
+        console.log('Domain changed, stopping workflow');
+        
+        // Update the stored URL
+        if (result.taskState) {
+            await chrome.storage.local.set({
+                taskState: {
+                    ...result.taskState,
+                    lastProcessedUrl: currentUrl
+                }
+            });
+        }
+        
+        // Mark session as completed due to domain change
+        activeSession.status = 'completed';
+        await chrome.storage.local.set({ activeSession });
+        
+        // Stop monitoring
+        stopMonitoring();
+    } else if (!domainChanged) {
+        // Update the stored URL if same domain
+        if (result.taskState) {
+            await chrome.storage.local.set({
+                taskState: {
+                    ...result.taskState,
+                    lastProcessedUrl: currentUrl
+                }
+            });
+        }
+    }
+    
+    return domainChanged;
 }

@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional
 
 from app.api.utils.dom_parser.dom_optimizer import generate_highlight_style_dom
+from app.api.utils.dom_parser.optimizer2 import generate_fixed_highlight_dom
 from app.models.dom import DOMState
 
 def build_system_prompt():
@@ -44,7 +45,8 @@ def build_user_message(dom_state: DOMState, task: str = None, result: Optional[L
     # dom_content, xpath_map, selector_map = generate_fixed_compact_dom(
     #     dom_state)
     # print('DOM content generated')
-    dom_content, xpath_map, selector_map = generate_highlight_style_dom(dom_state)
+    # dom_content, xpath_map, selector_map = generate_highlight_style_dom(dom_state)
+    dom_content, xpath_map, selector_map = generate_fixed_highlight_dom(dom_state)
     content = ""
     
     # Add task if provided

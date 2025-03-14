@@ -399,6 +399,19 @@ async function singleDOMProcessIteration(task_id: string): Promise<{
     try {
         console.log('Starting single DOM process iteration for task:', task_id);
         
+        // First, check if the domain has changed
+        const currentUrl = window.location.href;
+        const domainCheckResult = await checkDomainChange(currentUrl, task_id);
+        
+        if (domainCheckResult.domainChanged) {
+            console.log('Domain has changed, terminating workflow');
+            return { 
+                success: false, 
+                error: 'Domain changed, workflow terminated',
+                isDone: true // Mark as done so it stops monitoring
+            };
+        }
+        
         // Step 1: Get HTML and parse DOM
         const htmlContent = document.documentElement.outerHTML;
         console.log('Sending HTML to server for parsing...');
@@ -455,6 +468,9 @@ async function singleDOMProcessIteration(task_id: string): Promise<{
         
         console.log('DOM update successful:', updateResult);
         
+        // Check if backend signaled to complete
+        const isDone = !!updateResult.data?.result?.is_done;
+        
         // Step 3: Handle any actions returned from the server
         if (updateResult.data?.result?.actions?.length > 0) {
             console.log('Executing actions from update response');
@@ -501,8 +517,6 @@ async function singleDOMProcessIteration(task_id: string): Promise<{
             });
         }
         
-        // Step 4: Check if task is done
-        const isDone = !!updateResult.data?.result?.is_done;
         console.log('Is this iteration the final one?', isDone);
         
         return { 
@@ -516,6 +530,25 @@ async function singleDOMProcessIteration(task_id: string): Promise<{
             error: error instanceof Error ? error.message : String(error)
         };
     }
+}
+
+// Function to check if domain has changed
+async function checkDomainChange(currentUrl: string, task_id: string): Promise<{domainChanged: boolean}> {
+    return new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+            type: 'checkDomainChange',
+            currentUrl,
+            task_id
+        }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('Error checking domain change:', chrome.runtime.lastError);
+                // Default to false if there's an error
+                resolve({ domainChanged: false });
+            } else {
+                resolve({ domainChanged: !!response?.domainChanged });
+            }
+        });
+    });
 }
 
 // Handle messages from background script
@@ -598,6 +631,13 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
     }
     else if (message.type === 'updateSidebarState') {
         updateSidebarState(message.isOpen || false);
+        sendResponse({ success: true });
+        return true;
+    }
+    else if (message.type === 'workflowReset') {
+        // Clear all highlights and reset UI state
+        clearAllHighlights();
+        console.log('Workflow reset received, clearing DOM highlights');
         sendResponse({ success: true });
         return true;
     }
