@@ -19,7 +19,7 @@ export interface DOMUpdate {
 }
 
 export interface Message {
-    type: 'startTask' | 'startMonitoring' | 'stopMonitoring' | 'processDOM' | 'toggleSidebar' | 'toggleUI' | 'updateSidebarState' | 'dom_update' | 'pauseMonitoring' | 'resumeMonitoring' | 'executeActions' | 'startSequentialProcessing' | 'check_processing_status' | 'resetIterations' | 'singleDOMProcess' | 'ping' | 'resetWorkflow' | 'checkDomainChange';
+    type: 'startTask' | 'startMonitoring' | 'stopMonitoring' | 'processDOM' | 'toggleSidebar' | 'toggleUI' | 'updateSidebarState' | 'dom_update' | 'pauseMonitoring' | 'resumeMonitoring' | 'executeActions' | 'startSequentialProcessing' | 'check_processing_status' | 'resetIterations' | 'singleDOMProcess' | 'ping' | 'resetWorkflow' | 'checkDomainChange' | 'updateProcessingStatus';
     task?: string;
     task_id?: string;
     dom_data?: FrontendDOMState;
@@ -29,6 +29,7 @@ export interface Message {
     isPaused?: boolean;
     isOpen?: boolean;   // New property for sidebar state
     actions?: Action[];
+    status?: ProcessingStatus;
     isDone?: boolean;   // Property for signaling if processing is complete
     currentUrl?: string; // Current URL for domain change detection
 }
