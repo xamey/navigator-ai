@@ -4,6 +4,7 @@ from bs4 import NavigableString, Tag
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("DOM-Analyzer")
+logger.setLevel(logging.INFO)
 
 
 unaccepted_leaf_element_tags_set = {

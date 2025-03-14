@@ -278,26 +278,6 @@ export class AutomationHandler {
                 
                 return false;
             }
-
-            // Special case for GitHub repositories tab
-            // if (action.selector === '#repositories-tab' || action.element_id === 'repositories-tab') {
-            //     console.log('Special case: Looking for repositories tab by various means');
-                
-            //     // Try finding by aria-label
-            //     const repoTab = document.querySelector('[aria-label="Repositories"]') || 
-            //                     document.querySelector('[data-tab-item="repositories"]') ||
-            //                     Array.from(document.querySelectorAll('a')).find(a => 
-            //                         a.textContent?.trim().toLowerCase() === 'repositories'
-            //                     );
-                
-            //     if (repoTab && !element) {
-            //         console.log('Found repositories tab by alternative means:', repoTab);
-            //         await this.scrollToElement(repoTab);
-            //         await this.simulateHumanClick(repoTab);
-            //         return true;
-            //     }
-            // }
-
             switch (action.type) {
                 case 'click':
                     if (!element) return false;

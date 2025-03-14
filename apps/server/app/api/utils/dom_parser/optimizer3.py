@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger("dom-mapper")
+logger.setLevel(logging.INFO)
 
 class EnhancedHighlightStyleMapper:
     """

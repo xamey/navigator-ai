@@ -274,23 +274,49 @@ async function sequentialDOMProcessing(task_id: string, maxIterations = 10) {
 // Function to check if processing is done
 function checkIfProcessingDone(task_id: string): Promise<boolean> {
     return new Promise((resolve) => {
-        chrome.runtime.sendMessage({
-            type: 'check_processing_status',
-            task_id
-        }, response => {
-            console.log('Processing status check response:', response);
+        // First check local storage directly for the most up-to-date state
+        chrome.storage.local.get(['activeSession', 'taskState', 'lastUpdateResponse'], (result) => {
+            // Check multiple sources for workflow completion
             
-            // Check if the response has the isDone property
-            if (response && typeof response.isDone === 'boolean') {
-                resolve(response.isDone);
-            } else {
-                // If the server didn't explicitly say it's done, check active session status
-                chrome.storage.local.get(['activeSession'], (result) => {
-                    const isDone = result.activeSession?.status === 'completed';
-                    console.log('Checking active session status for completion:', isDone);
-                    resolve(isDone);
-                });
+            // 1. Check active session status
+            const sessionDone = result.activeSession?.status === 'completed';
+            
+            // 2. Check if last update response had is_done flag
+            const lastUpdateDone = result.lastUpdateResponse?.data?.result?.is_done === true;
+            
+            // 3. Check task state processing status
+            const processingDone = result.taskState?.processingStatus === 'completed';
+            
+            console.log('Completion check:', { 
+                sessionDone, 
+                lastUpdateDone, 
+                processingDone
+            });
+            
+            // If ANY of these indicate completion, consider the workflow done
+            const isDone = sessionDone || lastUpdateDone || processingDone;
+            
+            if (isDone) {
+                console.log('Workflow completion detected, marking as done');
+                resolve(true);
+                return;
             }
+            
+            // If not found in storage, try message-based check as backup
+            chrome.runtime.sendMessage({
+                type: 'check_processing_status',
+                task_id
+            }, response => {
+                console.log('Processing status check response:', response);
+                
+                // Check if the response has the isDone property
+                if (response && typeof response.isDone === 'boolean') {
+                    resolve(response.isDone);
+                } else {
+                    // Default to false if no completion signals found
+                    resolve(false);
+                }
+            });
         });
     });
 }
@@ -471,6 +497,22 @@ async function singleDOMProcessIteration(task_id: string): Promise<{
         // Check if backend signaled to complete
         const isDone = !!updateResult.data?.result?.is_done;
         
+        // If is_done is set to true, update activeSession in storage directly
+        if (isDone) {
+            console.log('Server indicated workflow is complete (is_done=true)');
+            await chrome.storage.local.get(['activeSession'], async (result) => {
+                if (result.activeSession) {
+                    await chrome.storage.local.set({
+                        activeSession: {
+                            ...result.activeSession,
+                            status: 'completed'
+                        }
+                    });
+                    console.log('Updated activeSession.status to completed');
+                }
+            });
+        }
+        
         // Step 3: Handle any actions returned from the server
         if (updateResult.data?.result?.actions?.length > 0) {
             console.log('Executing actions from update response');
@@ -535,19 +577,32 @@ async function singleDOMProcessIteration(task_id: string): Promise<{
 // Function to check if domain has changed
 async function checkDomainChange(currentUrl: string, task_id: string): Promise<{domainChanged: boolean}> {
     return new Promise((resolve) => {
-        chrome.runtime.sendMessage({
-            type: 'checkDomainChange',
-            currentUrl,
-            task_id
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                console.error('Error checking domain change:', chrome.runtime.lastError);
-                // Default to false if there's an error
+        try {
+            // Use a timeout to prevent hanging if no response is received
+            const timeoutId = setTimeout(() => {
+                console.warn('Domain change check timed out, assuming no change');
                 resolve({ domainChanged: false });
-            } else {
-                resolve({ domainChanged: !!response?.domainChanged });
-            }
-        });
+            }, 2000);
+            
+            chrome.runtime.sendMessage({
+                type: 'checkDomainChange',
+                currentUrl,
+                task_id
+            }, (response) => {
+                clearTimeout(timeoutId);
+                
+                if (chrome.runtime.lastError) {
+                    console.error('Error checking domain change:', chrome.runtime.lastError);
+                    // Default to false if there's an error
+                    resolve({ domainChanged: false });
+                } else {
+                    resolve({ domainChanged: !!response?.domainChanged });
+                }
+            });
+        } catch (error) {
+            console.error('Exception during domain change check:', error);
+            resolve({ domainChanged: false });
+        }
     });
 }
 

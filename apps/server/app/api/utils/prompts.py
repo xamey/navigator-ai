@@ -81,28 +81,49 @@ def build_user_message(dom_state, task=None, history=None, result=None):
     # Add history if provided with clear section header and formatting
     if history and len(history) > 0:
         content += "\nACTION HISTORY:\n"
+        
         for i, step in enumerate(history):
+            if not isinstance(step, dict):
+                print(f"Warning: Invalid history step format: {type(step)}")
+                continue
+                
             content += f"Step {i+1}: URL: {step.get('url', 'unknown')}\n"
             actions = step.get('actions', [])
-            if actions:
-                for action in actions:
-                    action_str = f"  - {action.get('type', '').upper()}"
+            
+            if not actions:
+                print(f"Warning: No actions in history step {i+1}")
+                continue
+                
+            if not isinstance(actions, list):
+                print(f"Warning: Actions not a list in step {i+1}: {type(actions)}")
+                # Try to handle single action object case
+                if isinstance(actions, dict):
+                    actions = [actions]
+                else:
+                    continue
+            
+            for action in actions:
+                if not isinstance(action, dict):
+                    print(f"Warning: Invalid action format in step {i+1}: {type(action)}")
+                    continue
                     
-                    # Add element reference
-                    if 'element_id' in action:
-                        action_str += f" element [{action['element_id']}]"
-                    elif 'xpath_ref' in action and 'selector' in action:
-                        action_str += f" element with selector: {action['selector']}"
-                    
-                    # Add action-specific details
-                    if 'text' in action and action['text']:
-                        action_str += f" with text: '{action['text']}'"
-                    if 'url' in action and action['url']:
-                        action_str += f" to URL: {action['url']}"
-                    if 'amount' in action:
-                        action_str += f" by {action['amount']} pixels"
-                    
-                    content += action_str + "\n"
+                action_str = f"  - {action.get('type', '').upper()}"
+                
+                # Add element reference
+                if 'element_id' in action:
+                    action_str += f" element [{action['element_id']}]"
+                elif 'xpath_ref' in action and 'selector' in action:
+                    action_str += f" element with selector: {action['selector']}"
+                
+                # Add action-specific details
+                if 'text' in action and action['text']:
+                    action_str += f" with text: '{action['text']}'"
+                if 'url' in action and action['url']:
+                    action_str += f" to URL: {action['url']}"
+                if 'amount' in action:
+                    action_str += f" by {action['amount']} pixels"
+                
+                content += action_str + "\n"
             content += "\n"
     
     # Add current result if provided with clear section header
