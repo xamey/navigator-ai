@@ -57,28 +57,22 @@ def build_user_message(dom_state, task=None, history=None, result=None):
     Returns:
         Tuple of (content, xpath_map, selector_map)
     """
-    # Include key attributes in the output
     key_attributes = ['id', 'name', 'type', 'value', 'placeholder', 'href']
     
-    # Create highlight-style representation with both maps
     dom_content, xpath_map, selector_map = generate_enhanced_highlight_dom(
         dom_state, include_attributes=key_attributes)
     
     content = ""
     
-    # Add task if provided with clear formatting
     if task:
         content += f"MAIN TASK (END GOAL): {task}\n\n"
     
-    # Add current URL with clear section header
     content += f"CURRENT URL: {dom_state.url}\n\n"
     
-    # Add interactive elements section with clear instructions
     content += "INTERACTIVE ELEMENTS:\n"
     content += "(Only elements with [E#] IDs can be interacted with)\n"
     content += f"{dom_content}\n"
     
-    # Add history if provided with clear section header and formatting
     if history and len(history) > 0:
         content += "\nACTION HISTORY:\n"
         
@@ -96,7 +90,6 @@ def build_user_message(dom_state, task=None, history=None, result=None):
                 
             if not isinstance(actions, list):
                 print(f"Warning: Actions not a list in step {i+1}: {type(actions)}")
-                # Try to handle single action object case
                 if isinstance(actions, dict):
                     actions = [actions]
                 else:
@@ -109,13 +102,11 @@ def build_user_message(dom_state, task=None, history=None, result=None):
                     
                 action_str = f"  - {action.get('type', '').upper()}"
                 
-                # Add element reference
                 if 'element_id' in action:
                     action_str += f" element [{action['element_id']}]"
                 elif 'xpath_ref' in action and 'selector' in action:
                     action_str += f" element with selector: {action['selector']}"
                 
-                # Add action-specific details
                 if 'text' in action and action['text']:
                     action_str += f" with text: '{action['text']}'"
                 if 'url' in action and action['url']:
@@ -126,11 +117,9 @@ def build_user_message(dom_state, task=None, history=None, result=None):
                 content += action_str + "\n"
             content += "\n"
     
-    # Add current result if provided with clear section header
     if result:
         content += f"RESULT OF LAST ACTION:\n{result}\n"
         
-    # Add final reminders to help avoid common mistakes
     content += "\nREMINDERS:\n"
     content += "- Use EXACT element IDs (E1, E2, etc.) as shown above\n"
     content += "- For input actions, include both element_id and text\n"

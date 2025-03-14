@@ -10,7 +10,7 @@ from app.models.dom import DOMState, DOMUpdate, DOMUpdateResponse
 from app.models.tasks import TaskCreate, TaskResponse
 from fastapi import APIRouter, HTTPException
 
-from app.api.utils.llm import generate
+from app.api.utils.llm import generate, generate_with_open_router
 
 router = APIRouter()
 
@@ -36,7 +36,6 @@ async def update_task(update: DOMUpdate):
         
         task_text = TaskService.get_task(update.task_id)
         
-        # Get task history and ensure it exists
         task_history = TaskService.get_task_history(update.task_id)
         print(f"Retrieved history for task {update.task_id}: {len(task_history)} entries")
         
@@ -48,12 +47,10 @@ async def update_task(update: DOMUpdate):
         )
 
         system_message = build_system_prompt()
+        
         result = generate(user_message, system_message)
         processed_result = process_element_references(result, xpath_map, selector_map)
         
-        # Store the AI-generated actions in Redis history
-        # This is the correct place to store actions - AFTER the AI generates them
-        # These actions will be used in the next request's history
         if processed_result and hasattr(processed_result, "actions") and processed_result.actions:
             print(f"Storing AI-generated actions for task {update.task_id}")
             StorageService.append_task_history(update.task_id, {

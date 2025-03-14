@@ -5,18 +5,15 @@ console.log('Content script loaded');
 
 let sidebarContainer: HTMLElement | null = null;
 
-// Function to create the extension container as a sidebar
 function createSidebarContainer() {
     console.log('Creating sidebar container');
 
-    // Check if container already exists
     let container = document.getElementById('navigator-ai-sidebar');
     if (container) {
         console.log('Sidebar container already exists');
         return container;
     }
 
-    // Create container for the sidebar
     container = document.createElement('div');
     container.id = 'navigator-ai-sidebar';
 
@@ -30,10 +27,8 @@ function createSidebarContainer() {
     container.style.transition = 'width 0.3s ease';
     container.style.overflow = 'hidden';
 
-    // Create a shadow root to isolate our CSS
     const shadow = container.attachShadow({ mode: 'closed' });
 
-    // Create styles for shadow DOM
     const style = document.createElement('style');
     style.textContent = `
         :host {
@@ -56,27 +51,22 @@ function createSidebarContainer() {
         }
     `;
 
-    // Create iframe to hold the sidebar content
     const iframe = document.createElement('iframe');
     iframe.src = chrome.runtime.getURL('popup.html');
     iframe.style.backgroundColor = 'transparent';
     iframe.style.opacity = '0.98';
     iframe.allow = 'autoplay';
 
-    // Add elements to shadow DOM
     shadow.appendChild(style);
     shadow.appendChild(iframe);
 
-    // Add container to document body
     document.body.appendChild(container);
 
-    // Store for later use
     sidebarContainer = container;
 
     return container;
 }
 
-// Function to update sidebar visibility state
 function updateSidebarState(isOpen: boolean) {
     console.log('Updating sidebar state:', isOpen);
 
@@ -95,7 +85,6 @@ function updateSidebarState(isOpen: boolean) {
     }
 }
 
-// Toggle sidebar visibility
 function toggleSidebar() {
     console.log('Toggling sidebar');
 
@@ -109,19 +98,185 @@ function toggleSidebar() {
     return !isCurrentlyOpen;
 }
 
+
+async function captureIframeContents(originalHtml: string): Promise<string> {
+    try {
+        console.log('Capturing iframe contents...');
+        
+        const iframes = document.querySelectorAll('iframe');
+        
+        if (iframes.length === 0) {
+            console.log('No iframes found on the page');
+            return originalHtml;
+        }
+        
+        console.log(`Found ${iframes.length} iframes on the page`);
+        let processedHtml = originalHtml;
+        
+        const iframeContents: string[] = [];
+        
+        for (let i = 0; i < iframes.length; i++) {
+            try {
+                const iframe = iframes[i];
+                
+                if (!iframe.contentDocument || !iframe.contentWindow || 
+                    iframe.src.startsWith('chrome-extension://')) {
+                    console.log(`Skipping iframe ${i} - cannot access content or is extension iframe`);
+                    continue;
+                }
+                
+                let iframeContent: string;
+                try {
+                    const iframeDoc = iframe.contentDocument;
+                    
+                    const baseContent = iframeDoc.documentElement.outerHTML;
+                    
+                    const nestedIframes = iframeDoc.querySelectorAll('iframe');
+                    if (nestedIframes.length > 0) {
+                        console.log(`Found ${nestedIframes.length} nested iframes in iframe ${i}`);
+                        iframeContent = await captureIframeContents(baseContent);
+                    } else {
+                        iframeContent = baseContent;
+                    }
+                } catch (err) {
+                    console.log(`Cannot access iframe ${i} content due to cross-origin restrictions:`, err);
+                    continue;
+                }
+                
+                const iframeId = `iframe-content-${i}`;
+                
+                const iframeAttrs: string[] = [];
+                if (iframe.id) iframeAttrs.push(`id="${iframe.id}"`);
+                if (iframe.className) iframeAttrs.push(`class="${iframe.className}"`);
+                if (iframe.src) iframeAttrs.push(`src="${iframe.src}"`);
+                if (iframe.name) iframeAttrs.push(`name="${iframe.name}"`);
+                
+                const iframeXPath = getXPathForElement(iframe);
+                if (iframeXPath) iframeAttrs.push(`xpath="${iframeXPath}"`);
+                
+                const iframeDataTag = `<navigator-iframe-data ${iframeAttrs.join(' ')} data-iframe-id="${iframeId}">\n${iframeContent}\n</navigator-iframe-data>`;
+                iframeContents.push(iframeDataTag);
+                
+                try {
+                    const domPosition = findIframePositionInHTML(processedHtml, iframe);
+                    if (domPosition > -1) {
+                        const beforeIframe = processedHtml.substring(0, domPosition);
+                        const afterIframe = processedHtml.substring(domPosition);
+                        
+                        const newAfterIframe = afterIframe.replace(
+                            /(<iframe\s)/i, 
+                            `$1data-navigator-iframe-id="${iframeId}" `
+                        );
+                        
+                        processedHtml = beforeIframe + newAfterIframe;
+                    }
+                } catch (markError) {
+                    console.error('Error marking iframe in HTML:', markError);
+                }
+            } catch (error) {
+                console.error(`Error processing iframe ${i}:`, error);
+            }
+        }
+        
+        if (iframeContents.length > 0) {
+            processedHtml += `\n<!-- Navigator AI Iframe Contents -->\n<navigator-iframes>\n${iframeContents.join('\n')}\n</navigator-iframes>`;
+            console.log(`Added content from ${iframeContents.length} iframes to the DOM`);
+        }
+        
+        return processedHtml;
+    } catch (error) {
+        console.error('Error capturing iframe contents:', error);
+        return originalHtml;
+    }
+}
+
+function getXPathForElement(element: Element): string | null {
+    try {
+        if (element === document.documentElement) {
+            return '/html';
+        }
+        
+        if (element === document.body) {
+            return '/html/body';
+        }
+        
+        let xpath = '';
+        let current = element;
+        
+        while (current && current !== document.documentElement) {
+            let nodeName = current.nodeName.toLowerCase();
+            let position = 1;
+            let sibling = current.previousSibling;
+            
+            while (sibling) {
+                if (sibling.nodeType === Node.ELEMENT_NODE && 
+                    sibling.nodeName.toLowerCase() === nodeName) {
+                    position++;
+                }
+                sibling = sibling.previousSibling;
+            }
+            
+            xpath = `/${nodeName}[${position}]${xpath}`;
+            
+            if (current.parentNode) {
+                current = current.parentNode as Element;
+            } else {
+                break;
+            }
+        }
+        
+        return `/html${xpath}`;
+    } catch (error) {
+        console.error('Error generating XPath:', error);
+        return null;
+    }
+}
+
+/**
+ * Helper function to find the approximate position of an iframe in the HTML string
+ */
+function findIframePositionInHTML(html: string, iframe: HTMLIFrameElement): number {
+    try {
+        const attributes: [string, string][] = [];
+        
+        if (iframe.id) attributes.push(['id', iframe.id]);
+        if (iframe.className) attributes.push(['class', iframe.className]);
+        if (iframe.src) attributes.push(['src', iframe.src]);
+        if (iframe.name) attributes.push(['name', iframe.name]);
+        
+        for (const [attr, value] of attributes) {
+            const searchStr = `<iframe ${attr}="${value}"`;
+            const altSearchStr = `<iframe ${attr}='${value}'`;
+            
+            let pos = html.indexOf(searchStr);
+            if (pos > -1) return pos;
+            
+            pos = html.indexOf(altSearchStr);
+            if (pos > -1) return pos;
+        }
+        
+        return html.indexOf('<iframe');
+    } catch (error) {
+        console.error('Error finding iframe position:', error);
+        return -1;
+    }
+}
+
 async function processDOM(task_id: string): Promise<FrontendDOMState> {
     try {
         console.log('Processing DOM for task:', task_id);
 
         const htmlContent = document.documentElement.outerHTML;
+        
+        const processedHtml = await captureIframeContents(htmlContent);
 
-        console.log('Sending HTML to server for parsing...');
-        const domStructure = await parseDOMonServer(htmlContent);
+        console.log('Sending HTML with iframe contents to server for parsing...');
+        const domStructure = await parseDOMonServer(processedHtml);
         console.log('Received parsed DOM structure from server');
 
         const domData: FrontendDOMState = {
             url: window.location.href,
-            html: htmlContent,
+            html: processedHtml,
             title: document.title,
             timestamp: new Date().toISOString(),
             structure: domStructure
@@ -195,11 +350,71 @@ function highlightInteractiveElements(domStructure: DOMHashMap) {
     interactiveElements.forEach((element: DOMNode, index: number) => {
         const xpath = (element as DOMElementNode).xpath;
         try {
-            const highlightedElement = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue as HTMLElement;
+            // First try to get the element using our iframe-aware function
+            let highlightedElement = getElementByXPathIncludingIframes(xpath);
+            
+            // If that fails, try the standard approach
+            if (!highlightedElement) {
+                highlightedElement = document.evaluate(
+                    xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+                ).singleNodeValue as HTMLElement;
+            }
+            
             if (highlightedElement && highlightedElement instanceof HTMLElement) {
-                highlightedElement.style.outline = `2px solid ${colors[index % colors.length]}`;
-                highlightedElement.style.outlineOffset = '2px';
-                highlightedElement.classList.add('navigator-ai-highlight');
+                // Check if element is in an iframe
+                let parentDocument = document;
+                let elementWindow = window;
+                let isInIframe = false;
+                
+                // Find which document this element belongs to
+                try {
+                    const iframes = document.querySelectorAll('iframe');
+                    for (let i = 0; i < iframes.length; i++) {
+                        const iframe = iframes[i];
+                        if (iframe.contentDocument && iframe.contentDocument.contains(highlightedElement)) {
+                            parentDocument = iframe.contentDocument;
+                            elementWindow = iframe.contentWindow!;
+                            isInIframe = true;
+                            break;
+                        }
+                    }
+                } catch (frameError) {
+                    console.error('Error finding parent frame:', frameError);
+                }
+                
+                // Apply highlighting appropriately based on whether it's in an iframe
+                if (isInIframe) {
+                    // For iframe elements, we need to inject a style and apply the highlight via class
+                    try {
+                        // Create a style element in the iframe if it doesn't exist
+                        let styleEl = parentDocument.getElementById('navigator-ai-highlight-style');
+                        if (!styleEl) {
+                            styleEl = parentDocument.createElement('style');
+                            styleEl.id = 'navigator-ai-highlight-style';
+                            parentDocument.head.appendChild(styleEl);
+                        }
+                        
+                        // Add the highlight class style
+                        const color = colors[index % colors.length];
+                        styleEl.textContent += `
+                            .navigator-ai-highlight-${index} {
+                                outline: 2px solid ${color} !important;
+                                outline-offset: 2px !important;
+                            }
+                        `;
+                        
+                        // Apply the class
+                        highlightedElement.classList.add(`navigator-ai-highlight-${index}`);
+                        highlightedElement.classList.add('navigator-ai-highlight');
+                    } catch (styleError) {
+                        console.error('Error applying iframe styles:', styleError);
+                    }
+                } else {
+                    // For regular document elements, apply style directly
+                    highlightedElement.style.outline = `2px solid ${colors[index % colors.length]}`;
+                    highlightedElement.style.outlineOffset = '2px';
+                    highlightedElement.classList.add('navigator-ai-highlight');
+                }
             }
         } catch (error) {
             console.error('Error highlighting element:', error);
@@ -209,14 +424,58 @@ function highlightInteractiveElements(domStructure: DOMHashMap) {
 
 // Function to clear all highlights
 function clearAllHighlights() {
+    // Clear highlights in the main document
     const highlightedElements = document.querySelectorAll('.navigator-ai-highlight');
     highlightedElements.forEach((el) => {
         if (el instanceof HTMLElement) {
             el.style.outline = '';
             el.style.outlineOffset = '';
-            el.classList.remove('navigator-ai-highlight');
+            // Remove all navigator-ai-highlight classes
+            el.className = el.className
+                .split(' ')
+                .filter(c => !c.startsWith('navigator-ai-highlight'))
+                .join(' ');
         }
     });
+    
+    // Also clear highlights in all accessible iframes
+    try {
+        const iframes = document.querySelectorAll('iframe');
+        for (let i = 0; i < iframes.length; i++) {
+            const iframe = iframes[i];
+            
+            // Skip iframes that can't be accessed
+            if (!iframe.contentDocument || iframe.src.startsWith('chrome-extension://')) {
+                continue;
+            }
+            
+            try {
+                // Clear highlighted elements in this iframe
+                const iframeHighlights = iframe.contentDocument.querySelectorAll('.navigator-ai-highlight');
+                iframeHighlights.forEach((el) => {
+                    if (el instanceof HTMLElement) {
+                        el.style.outline = '';
+                        el.style.outlineOffset = '';
+                        // Remove all navigator-ai-highlight classes
+                        el.className = el.className
+                            .split(' ')
+                            .filter(c => !c.startsWith('navigator-ai-highlight'))
+                            .join(' ');
+                    }
+                });
+                
+                // Remove the highlight style element if it exists
+                const styleEl = iframe.contentDocument.getElementById('navigator-ai-highlight-style');
+                if (styleEl) {
+                    styleEl.parentNode?.removeChild(styleEl);
+                }
+            } catch (iframeError) {
+                console.error(`Error clearing highlights in iframe ${i}:`, iframeError);
+            }
+        }
+    } catch (error) {
+        console.error('Error clearing highlights in iframes:', error);
+    }
 }
 
 // Initialize automation handler
@@ -416,7 +675,6 @@ async function getLatestUpdateResult(task_id: string): Promise<any> {
     };
 }
 
-// New function for reliable single DOM process iteration using storage for state management
 async function singleDOMProcessIteration(task_id: string): Promise<{ 
     success: boolean; 
     error?: string;
@@ -425,7 +683,6 @@ async function singleDOMProcessIteration(task_id: string): Promise<{
     try {
         console.log('Starting single DOM process iteration for task:', task_id);
         
-        // First, check if the domain has changed
         const currentUrl = window.location.href;
         const domainCheckResult = await checkDomainChange(currentUrl, task_id);
         
@@ -434,22 +691,24 @@ async function singleDOMProcessIteration(task_id: string): Promise<{
             return { 
                 success: false, 
                 error: 'Domain changed, workflow terminated',
-                isDone: true // Mark as done so it stops monitoring
+                isDone: true 
             };
         }
         
-        // Step 1: Get HTML and parse DOM
+        // Capture main document HTML
         const htmlContent = document.documentElement.outerHTML;
-        console.log('Sending HTML to server for parsing...');
         
-        // Parse DOM data
-        const domStructure = await parseDOMonServer(htmlContent);
+        // Add a marker for iframe content that we'll replace with actual iframe content
+        const processedHtml = await captureIframeContents(htmlContent);
+        
+        console.log('Sending HTML with iframe contents to server for parsing...');
+        
+        const domStructure = await parseDOMonServer(processedHtml);
         console.log('Received parsed DOM structure from server');
         
-        // Create DOM data object
         const domData: FrontendDOMState = {
             url: window.location.href,
-            html: htmlContent,
+            html: processedHtml,
             title: document.title,
             timestamp: new Date().toISOString(),
             structure: domStructure
@@ -606,21 +865,17 @@ async function checkDomainChange(currentUrl: string, task_id: string): Promise<{
     });
 }
 
-// Handle messages from background script
 chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
     console.log('Content script received message:', message.type);
 
-    // Simple ping to check if content script is loaded
     if (message.type === 'ping') {
         sendResponse({ success: true });
         return true;
     }
     
-    // Process a single DOM iteration fully (parse + update + actions)
     if (message.type === 'singleDOMProcess' && message.task_id) {
-        createSidebarContainer(); // Ensure container exists
+        createSidebarContainer(); 
         
-        // This processes a single iteration completely and reliably
         singleDOMProcessIteration(message.task_id)
             .then((result) => {
                 console.log('Single DOM process complete:', result);
@@ -634,7 +889,7 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
                 });
             });
         
-        return true; // Keep channel open for async response
+        return true;
     }
 
     if (message.type === 'executeActions' && Array.isArray(message.actions)) {
@@ -662,7 +917,7 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
                     error: error instanceof Error ? error.message : String(error) 
                 });
             });
-        return true; // Keep channel open for async response
+        return true; 
     }
     else if (message.type === 'startSequentialProcessing' && message.task_id) {
         createSidebarContainer(); // Ensure container exists
@@ -774,3 +1029,72 @@ const colors = [
     "#800080", "#008080", "#FF69B4", "#4B0082",
     "#FF4500", "#2E8B57", "#DC143C", "#4682B4",
 ];
+
+/**
+ * Utility function to get an element by XPath, including searching in iframes
+ * This is useful for targeting elements in the DOM structure with iframe contents
+ */
+function getElementByXPathIncludingIframes(xpath: string): HTMLElement | null {
+    try {
+        // First try to find the element in the main document
+        const result = document.evaluate(
+            xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+        );
+        const element = result.singleNodeValue as HTMLElement;
+        
+        if (element) {
+            return element;
+        }
+        
+        // If not found, check if it's in an iframe
+        // Look for navigator-iframe-data tags in the DOM xpath which might indicate
+        // the element is inside an iframe
+        const iframePathMatch = xpath.match(/\/navigator-iframe-data\[@data-iframe-id="([^"]+)"\]/);
+        
+        if (iframePathMatch) {
+            const iframeId = iframePathMatch[1];
+            const iframeElement = document.querySelector(`iframe[data-navigator-iframe-id="${iframeId}"]`);
+            
+            if (iframeElement && iframeElement instanceof HTMLIFrameElement) {
+                try {
+                    // Extract the part of xpath after the navigator-iframe-data part
+                    const remainingXpath = xpath.substring(xpath.indexOf(iframePathMatch[0]) + iframePathMatch[0].length);
+                    
+                    // Try to evaluate this xpath in the iframe content document
+                    if (iframeElement.contentDocument) {
+                        const iframeResult = iframeElement.contentDocument.evaluate(
+                            remainingXpath, iframeElement.contentDocument, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+                        );
+                        return iframeResult.singleNodeValue as HTMLElement;
+                    }
+                } catch (iframeError) {
+                    console.error('Error evaluating XPath in iframe:', iframeError);
+                }
+            }
+        }
+        
+        // If we still haven't found it, try searching in all accessible iframes
+        const iframes = document.querySelectorAll('iframe');
+        for (let i = 0; i < iframes.length; i++) {
+            const iframe = iframes[i];
+            if (iframe.contentDocument) {
+                try {
+                    const iframeResult = iframe.contentDocument.evaluate(
+                        xpath, iframe.contentDocument, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+                    );
+                    const iframeElement = iframeResult.singleNodeValue as HTMLElement;
+                    if (iframeElement) {
+                        return iframeElement;
+                    }
+                } catch (iframeError) {
+                    // Silently continue to the next iframe
+                }
+            }
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('Error finding element by XPath:', error);
+        return null;
+    }
+}

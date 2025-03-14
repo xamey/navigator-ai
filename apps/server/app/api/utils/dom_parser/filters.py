@@ -65,7 +65,6 @@ def is_element_visible(element: Tag) -> bool:
         logger.error(f"Error in is_element_visible: {error}")
         return True
 
-
 def is_top_element(element: Tag) -> bool:
     """
     Simplified version of isTopElement since we can't determine stacking in static HTML.
@@ -91,7 +90,6 @@ def is_top_element(element: Tag) -> bool:
         logger.error(f"Error in is_top_element: {error}")
         return True
 
-
 def is_text_node_visible(text_node: NavigableString) -> bool:
     """Check if a text node is likely visible."""
     try:
@@ -109,7 +107,6 @@ def is_text_node_visible(text_node: NavigableString) -> bool:
     except Exception as error:
         logger.error(f"Error in is_text_node_visible: {error}")
         return True
-
 
 def is_interactive_element(element: Tag) -> bool:
     """Check if an element is interactive based on its tag and attributes."""

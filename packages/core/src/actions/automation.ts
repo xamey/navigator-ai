@@ -6,21 +6,17 @@ export class AutomationHandler {
 
         let element: Element | null = null;
 
-        // 1. Try by element_id (keeping original behavior since it's not the actual ID)
         if (action.element_id) {
             element = document.getElementById(action.element_id);
             console.log(`Searching by ID "${action.element_id}": ${element ? 'Found' : 'Not found'}`);
         }
 
-        // 2. Try selector with proper escaping
         if (!element && action.selector) {
             try {
-                // Handle special characters in selectors
                 const escapedSelector = this.escapeSelector(action.selector);
                 element = document.querySelector(escapedSelector);
                 console.log(`Searching by selector "${escapedSelector}": ${element ? 'Found' : 'Not found'}`);
 
-                // If still not found, try without ID parts (which might be dynamic)
                 if (!element) {
                     const genericSelector = action.selector.replace(/#[^.#\s[\]]+/g, '*');
                     if (genericSelector !== action.selector) {
@@ -34,14 +30,13 @@ export class AutomationHandler {
             }
         }
 
-        // 3. Try xpath
         if (!element && action.xpath_ref) {
             try {
                 const result = document.evaluate(
                     action.xpath_ref,
                     document,
                     null,
-                    XPathResult.ANY_TYPE,
+                    XPathResult.FIRST_ORDERED_NODE_TYPE,
                     null
                 );
                 element = result.singleNodeValue as Element;
@@ -51,7 +46,6 @@ export class AutomationHandler {
             }
         }
 
-        // 4. Try by text content with enhanced matching
         if (!element && (action.text || action.type === 'click')) {
             const textToFind = action.text ||
                 (action.selector?.includes('repositories') ? 'Repositories' : '') ||
@@ -60,22 +54,18 @@ export class AutomationHandler {
             if (textToFind) {
                 console.log(`Trying to find element by text: "${textToFind}"`);
 
-                // Look for interactive elements with this text (expanded selector)
                 const elementsWithText = Array.from(
                     document.querySelectorAll('a, button, [role="tab"], [role="button"], input[type="submit"], input[type="button"], .btn, nav li, [aria-label*="' + textToFind + '"], [title*="' + textToFind + '"]')
                 ).filter(el => {
-                    // Check element text content
                     const content = el.textContent?.trim().toLowerCase() || '';
                     if (content.includes(textToFind.toLowerCase())) return true;
 
-                    // Check child elements' text content (for nested text)
                     for (const child of Array.from(el.children)) {
                         if (child.textContent?.trim().toLowerCase().includes(textToFind.toLowerCase())) {
                             return true;
                         }
                     }
 
-                    // Check attributes that might contain meaningful text
                     const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
                     const title = el.getAttribute('title')?.toLowerCase() || '';
                     const alt = el.getAttribute('alt')?.toLowerCase() || '';
@@ -88,7 +78,6 @@ export class AutomationHandler {
                 });
 
                 if (elementsWithText.length > 0) {
-                    // Prioritize visible elements
                     const visibleElements = elementsWithText.filter(el => this.isElementVisible(el as Element));
                     element = visibleElements.length > 0 ? visibleElements[0] as Element : elementsWithText[0] as Element;
                     console.log(`Found element by text content:`, element);
@@ -96,7 +85,6 @@ export class AutomationHandler {
             }
         }
 
-        // 5. Try looking in iframes if still not found
         if (!element) {
             const iframes = document.querySelectorAll('iframe');
             for (let i = 0; i < iframes.length; i++) {
@@ -105,7 +93,6 @@ export class AutomationHandler {
                     const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
 
                     if (iframeDoc) {
-                        // Try the same strategies inside the iframe
                         if (action.element_id) {
                             element = iframeDoc.getElementById(action.element_id);
                             if (element) break;
@@ -119,21 +106,16 @@ export class AutomationHandler {
                                 console.log(`Error with selector in iframe:`, e);
                             }
                         }
-
-                        // Additional iframe checks could be added here
                     }
                 } catch (error) {
-                    // Same-origin policy might prevent accessing iframe content
                     console.log(`Cannot access iframe content due to security restrictions`);
                 }
             }
         }
 
-        // 6. Check if element is actually interactive and visible
         if (element && !this.isElementVisible(element)) {
             console.log('Element found but not visible, looking for alternatives');
 
-            // Look for nearby visible interactive elements
             if (action.type === 'click') {
                 const parent = element.parentElement;
                 if (parent) {
@@ -148,7 +130,6 @@ export class AutomationHandler {
             }
         }
 
-        // 7. Retry with delay if element not found
         if (!element && retryCount < 3) {
             console.log(`Element not found, waiting and retrying (attempt ${retryCount + 1}/3)`);
             await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Increasing wait time
@@ -184,7 +165,6 @@ export class AutomationHandler {
     return true;
 }
 
-    // Helper method to escape special characters in CSS selectors
     private escapeSelector(selector: string): string {
         // If the selector contains potential special characters that need escaping
         if (selector.includes(':') || selector.includes('.') || selector.includes('#')) {
@@ -223,11 +203,9 @@ export class AutomationHandler {
     }
 
     private async simulateHumanClick(element: Element) {
-        // Add some randomness to make it more human-like
         const delay = Math.random() * 200 + 100; // Random delay between 100-300ms
         await new Promise(resolve => setTimeout(resolve, delay));
 
-        // Trigger mouse events for natural interaction
         const events = ['mousedown', 'mouseup', 'click'];
         for (const eventType of events) {
             const event = new MouseEvent(eventType, {
@@ -264,12 +242,10 @@ export class AutomationHandler {
         try {
             console.log('Executing action:', action.type, action);
 
-            // First try to find the element
             const element = await this.findElement(action);
             if (!element && action.type !== 'navigate') {
                 console.error('Element not found for action:', action);
                 
-                // If we haven't exceeded retries, try again
                 if (retryCount < 2) {
                     console.log(`Action failed, waiting and retrying (attempt ${retryCount + 1}/2)`);
                     await new Promise(resolve => setTimeout(resolve, 2000)); // Wait longer between retries
@@ -345,12 +321,10 @@ export class AutomationHandler {
                     console.log(`Action ${i+1} (${action.type}) completed successfully`);
                 }
                 
-                // Add a longer delay between actions (1 second)
                 await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (error) {
                 console.error(`Unexpected error in action ${i+1} (${action.type}):`, error);
                 results.push(false);
-                // Continue with next action despite errors
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }

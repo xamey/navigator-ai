@@ -8,14 +8,12 @@ let monitoringInterval: NodeJS.Timeout | null = null;
 let currentIterations = 0;
 let isPaused = false;
 
-// Store the most recent server update response to avoid message passing issues
 let lastUpdateResponse: { 
     timestamp: string; 
     task_id: string; 
     data: any;
 } | null = null;
 
-// Store active task session
 let activeSession: {
     taskId: string;
     status: 'active' | 'completed' | 'error' | 'paused';
@@ -23,7 +21,6 @@ let activeSession: {
     isRunning?: boolean;
 } | null = null;
 
-// Initialize session from storage on extension load
 chrome.storage.local.get(['activeSession'], (result) => {
     console.log('Loaded active session from storage:', result.activeSession);
     if (result.activeSession) {
@@ -32,7 +29,6 @@ chrome.storage.local.get(['activeSession'], (result) => {
     }
 });
 
-// Helper function to check if a URL is accessible by content scripts
 function isValidUrl(url: string): boolean {
     return typeof url === 'string' &&
         !url.startsWith('chrome://') &&
@@ -43,20 +39,17 @@ function isValidUrl(url: string): boolean {
         !url.startsWith('brave://');
 }
 
-// Handle extension icon click - toggle sidebar
 chrome.action.onClicked.addListener((tab) => {
     console.log('Extension icon clicked, toggling sidebar in tab:', tab.id);
     if (tab.id && tab.url && isValidUrl(tab.url)) {
         chrome.tabs.sendMessage(tab.id, { type: 'toggleSidebar' })
             .catch(err => {
                 console.error('Error sending toggleSidebar message:', err);
-                // Try injecting content script if it's not loaded
                 chrome.scripting.executeScript({
                     target: { tabId: tab.id! },
                     files: ['content.js']
                 })
                     .then(() => {
-                        // Now try sending the message again
                         chrome.tabs.sendMessage(tab.id!, { type: 'toggleSidebar' });
                     })
                     .catch(injectErr => {
@@ -74,7 +67,7 @@ chrome.runtime.onMessage.addListener(async (message: Message, sender, sendRespon
     try {
         if (message.type === 'startTask') {
             await handleStartTask(message, sendResponse);
-            return true; // Keep channel open for async response
+            return true; 
         } else if (message.type === 'startMonitoring') {
             startMonitoring(message.task_id!);
             sendResponse({ success: true });
@@ -198,7 +191,6 @@ async function handleDOMUpdate(message: Message) {
             structure: message.dom_data.structure ?? {}
         };
 
-        // Step 1: Store that we're starting a server update
         await chrome.storage.local.set({
             currentDOMUpdate: {
                 task_id: message.task_id,
@@ -230,7 +222,6 @@ async function handleDOMUpdate(message: Message) {
             data = await response.json();
             console.log('DOM update successful:', data);
             
-            // Store the response for later querying
             lastUpdateResponse = {
                 timestamp: new Date().toISOString(),
                 task_id: message.task_id,
@@ -322,7 +313,6 @@ async function handleStartTask(message: Message, sendResponse: (response?: any) 
     try {
         console.log('Starting task:', message.task);
 
-        // If there's an active session, use that task ID
         if (activeSession?.taskId && activeSession.status === 'active') {
             console.log('Using existing active session:', activeSession.taskId);
             sendResponse({ task_id: activeSession.taskId });
@@ -367,14 +357,11 @@ async function startMonitoring(task_id: string) {
         monitoringInterval = null;
     }
 
-    // Reset iterations counter when starting workflow
     currentIterations = 0;
     isPaused = false;
     
-    // Store a flag to indicate if DOM update is in progress
     let isUpdateInProgress = false;
 
-    // Simple function to process one iteration
     const processOneIteration = async () => {
         if (isPaused) {
             console.log('Monitoring is paused, skipping iteration');
@@ -400,7 +387,6 @@ async function startMonitoring(task_id: string) {
             
             const tabId = tabs[0].id;
             
-            // Make sure content script is loaded
             try {
                 await chrome.tabs.sendMessage(tabId, { type: 'ping' });
             } catch (error) {
@@ -411,7 +397,6 @@ async function startMonitoring(task_id: string) {
                 });
             }
             
-            // Use startSequentialProcessing in content script - this will handle a single iteration
             const response = await new Promise<any>((resolve) => {
                 chrome.tabs.sendMessage(tabId, {
                     type: 'singleDOMProcess',

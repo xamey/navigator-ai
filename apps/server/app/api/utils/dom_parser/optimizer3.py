@@ -16,7 +16,6 @@ class EnhancedHighlightStyleMapper:
             'aria-label', 'aria-placeholder', 'role', 'title'
         ]
         
-        # Special attributes that are important for form elements
         self.form_element_attributes = [
             'placeholder', 'aria-label', 'aria-placeholder', 'title',
             'name', 'role', 'type'
@@ -234,35 +233,27 @@ class EnhancedHighlightStyleMapper:
         tag_name = self._get_attr(element, 'tagName', '').lower()
         attributes = self._get_attr(element, 'attributes', {})
         
-        # Get text content
         element_text = self._get_text_till_next_highlighted(elem_id, dom_hashmap)
         
-        # Format attributes with special handling for form elements
         attributes_str = ''
         is_form_element = self._is_form_element(element)
         
         if self.include_attributes:
             attr_values = []
             
-            # For form elements, prioritize descriptive attributes
             if is_form_element:
-                # First check for descriptive attributes
                 for key in self.form_element_attributes:
                     if key in attributes and attributes[key]:
                         attr_values.append(f"{key}={attributes[key]}")
                 
-                # Add type if it's an input
                 if tag_name == 'input' and 'type' in attributes:
                     attr_values.append(attributes['type'])
                 
-                # If input has a value, include it
                 if 'value' in attributes and attributes['value']:
                     attr_values.append(f"value='{attributes['value']}'")
             else:
-                # For non-form elements, include selected attributes
                 for key, value in attributes.items():
                     if key in self.include_attributes and value and value != tag_name:
-                        # Don't duplicate text content in attributes
                         if not (isinstance(value, str) and element_text and 
                                 (value == element_text or value in element_text)):
                             attr_values.append(str(value))
@@ -270,13 +261,11 @@ class EnhancedHighlightStyleMapper:
             if attr_values:
                 attributes_str = ' '.join(attr_values)
         
-        # Build the output line
         line = f"[{element_id}]<{tag_name} "
         
         if attributes_str:
             line += f"{attributes_str}"
             
-        # For form elements with no text content, use placeholder or label as text
         if is_form_element and not element_text:
             form_text = None
             for attr in ['placeholder', 'aria-label', 'title']:
