@@ -2,6 +2,7 @@ from typing import Dict, List, Optional
 
 from app.api.utils.dom_parser.dom_optimizer import generate_highlight_style_dom
 from app.api.utils.dom_parser.optimizer2 import generate_fixed_highlight_dom
+from app.api.utils.dom_parser.optimizer3 import generate_enhanced_highlight_dom
 from app.models.dom import DOMState
 
 def build_system_prompt():
@@ -15,7 +16,7 @@ Your task is to generate a JSON response containing a list of actions to perform
 
 IMPORTANT: Elements are identified by unique IDs in the format E1, E2, etc. These IDs map to the actual elements
 on the page. In your response, use these IDs to refer to elements you want to interact with.
-
+Never tell done until the task is completed and you receive it in the previous goal evaluation.
 **ALWAYS** respond with valid JSON in this exact format:
 ```json
 {
@@ -46,7 +47,8 @@ def build_user_message(dom_state: DOMState, task: str = None, result: Optional[L
     #     dom_state)
     # print('DOM content generated')
     # dom_content, xpath_map, selector_map = generate_highlight_style_dom(dom_state)
-    dom_content, xpath_map, selector_map = generate_fixed_highlight_dom(dom_state)
+    # dom_content, xpath_map, selector_map = generate_fixed_highlight_dom(dom_state)
+    dom_content, xpath_map, selector_map = generate_enhanced_highlight_dom(dom_state)
     content = ""
     
     # Add task if provided

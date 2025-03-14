@@ -3,23 +3,38 @@ import { Action } from '../types';
 export class AutomationHandler {
     private async findElement(action: Action, retryCount = 0): Promise<Element | null> {
         console.log(`Attempting to find element (attempt ${retryCount + 1})`, action);
-        
-        // Try multiple approaches to find the element
+
         let element: Element | null = null;
-        
-        // First try the specified method
+
+        // 1. Try by element_id (keeping original behavior since it's not the actual ID)
         if (action.element_id) {
             element = document.getElementById(action.element_id);
             console.log(`Searching by ID "${action.element_id}": ${element ? 'Found' : 'Not found'}`);
-        } 
-        
-        // Try selector if element_id failed or was not provided
+        }
+
+        // 2. Try selector with proper escaping
         if (!element && action.selector) {
-            element = document.querySelector(action.selector);
-            console.log(`Searching by selector "${action.selector}": ${element ? 'Found' : 'Not found'}`);
-        } 
-        
-        // Try xpath if other methods failed or were not provided
+            try {
+                // Handle special characters in selectors
+                const escapedSelector = this.escapeSelector(action.selector);
+                element = document.querySelector(escapedSelector);
+                console.log(`Searching by selector "${escapedSelector}": ${element ? 'Found' : 'Not found'}`);
+
+                // If still not found, try without ID parts (which might be dynamic)
+                if (!element) {
+                    const genericSelector = action.selector.replace(/#[^.#\s[\]]+/g, '*');
+                    if (genericSelector !== action.selector) {
+                        const escapedGenericSelector = this.escapeSelector(genericSelector);
+                        console.log(`Trying generic selector: ${escapedGenericSelector}`);
+                        element = document.querySelector(escapedGenericSelector);
+                    }
+                }
+            } catch (error) {
+                console.error(`Error with selector "${action.selector}":`, error);
+            }
+        }
+
+        // 3. Try xpath
         if (!element && action.xpath_ref) {
             try {
                 const result = document.evaluate(
@@ -35,50 +50,171 @@ export class AutomationHandler {
                 console.error(`Error evaluating XPath "${action.xpath_ref}":`, error);
             }
         }
-        
-        // If we have a selector but no element, try a more generic query
-        if (!element && action.selector) {
-            // Try a more general selector by removing IDs which might be dynamic
-            const genericSelector = action.selector.replace(/#[^.#\s[\]]+/g, '*');
-            if (genericSelector !== action.selector) {
-                console.log(`Trying generic selector: ${genericSelector}`);
-                element = document.querySelector(genericSelector);
-            }
-        }
-        
-        // If element still not found, we could try by text content or other heuristics
+
+        // 4. Try by text content with enhanced matching
         if (!element && (action.text || action.type === 'click')) {
-            // For click actions, try to find buttons or links with similar text
-            const textToFind = action.text || 
+            const textToFind = action.text ||
                 (action.selector?.includes('repositories') ? 'Repositories' : '') ||
                 (action.element_id?.includes('repositories') ? 'Repositories' : '');
-                
+
             if (textToFind) {
                 console.log(`Trying to find element by text: "${textToFind}"`);
-                
-                // Look for links or buttons with this text
-                const elementsWithText = Array.from(document.querySelectorAll('a, button, [role="tab"]'))
-                    .filter(el => {
-                        const content = el.textContent?.trim().toLowerCase() || '';
-                        return content.includes(textToFind.toLowerCase());
-                    });
-                
+
+                // Look for interactive elements with this text (expanded selector)
+                const elementsWithText = Array.from(
+                    document.querySelectorAll('a, button, [role="tab"], [role="button"], input[type="submit"], input[type="button"], .btn, nav li, [aria-label*="' + textToFind + '"], [title*="' + textToFind + '"]')
+                ).filter(el => {
+                    // Check element text content
+                    const content = el.textContent?.trim().toLowerCase() || '';
+                    if (content.includes(textToFind.toLowerCase())) return true;
+
+                    // Check child elements' text content (for nested text)
+                    for (const child of Array.from(el.children)) {
+                        if (child.textContent?.trim().toLowerCase().includes(textToFind.toLowerCase())) {
+                            return true;
+                        }
+                    }
+
+                    // Check attributes that might contain meaningful text
+                    const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+                    const title = el.getAttribute('title')?.toLowerCase() || '';
+                    const alt = el.getAttribute('alt')?.toLowerCase() || '';
+                    const placeholder = el.getAttribute('placeholder')?.toLowerCase() || '';
+
+                    return ariaLabel.includes(textToFind.toLowerCase()) ||
+                        title.includes(textToFind.toLowerCase()) ||
+                        alt.includes(textToFind.toLowerCase()) ||
+                        placeholder.includes(textToFind.toLowerCase());
+                });
+
                 if (elementsWithText.length > 0) {
-                    element = elementsWithText[0] as Element;
+                    // Prioritize visible elements
+                    const visibleElements = elementsWithText.filter(el => this.isElementVisible(el as Element));
+                    element = visibleElements.length > 0 ? visibleElements[0] as Element : elementsWithText[0] as Element;
                     console.log(`Found element by text content:`, element);
                 }
             }
         }
-        
-        // If element not found and we haven't exceeded retries, try again after a delay
+
+        // 5. Try looking in iframes if still not found
+        if (!element) {
+            const iframes = document.querySelectorAll('iframe');
+            for (let i = 0; i < iframes.length; i++) {
+                try {
+                    const iframe = iframes[i];
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+
+                    if (iframeDoc) {
+                        // Try the same strategies inside the iframe
+                        if (action.element_id) {
+                            element = iframeDoc.getElementById(action.element_id);
+                            if (element) break;
+                        }
+
+                        if (action.selector) {
+                            try {
+                                element = iframeDoc.querySelector(this.escapeSelector(action.selector));
+                                if (element) break;
+                            } catch (e) {
+                                console.log(`Error with selector in iframe:`, e);
+                            }
+                        }
+
+                        // Additional iframe checks could be added here
+                    }
+                } catch (error) {
+                    // Same-origin policy might prevent accessing iframe content
+                    console.log(`Cannot access iframe content due to security restrictions`);
+                }
+            }
+        }
+
+        // 6. Check if element is actually interactive and visible
+        if (element && !this.isElementVisible(element)) {
+            console.log('Element found but not visible, looking for alternatives');
+
+            // Look for nearby visible interactive elements
+            if (action.type === 'click') {
+                const parent = element.parentElement;
+                if (parent) {
+                    const nearbyElements = Array.from(parent.querySelectorAll('a, button, [role="button"], input[type="submit"]'))
+                        .filter(el => this.isElementVisible(el as Element));
+
+                    if (nearbyElements.length > 0) {
+                        element = nearbyElements[0] as Element;
+                        console.log('Found nearby visible interactive element instead:', element);
+                    }
+                }
+            }
+        }
+
+        // 7. Retry with delay if element not found
         if (!element && retryCount < 3) {
             console.log(`Element not found, waiting and retrying (attempt ${retryCount + 1}/3)`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Increasing wait time
             return this.findElement(action, retryCount + 1);
         }
-        
+
         return element;
     }
+
+    private isElementVisible(element: Element): boolean {
+    if (!element || !(element instanceof HTMLElement)) return false;
+    
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+        return false;
+    }
+    
+    // Check if element has zero size
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        return false;
+    }
+    
+    // Check if element is within viewport
+    const isInViewport = (
+        rect.top >= 0 &&
+        rect.left >= 0 &&
+        rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+        rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+    );
+    
+    // Element might still be valid even if not in viewport, but we prioritize visible elements
+    return true;
+}
+
+    // Helper method to escape special characters in CSS selectors
+    private escapeSelector(selector: string): string {
+        // If the selector contains potential special characters that need escaping
+        if (selector.includes(':') || selector.includes('.') || selector.includes('#')) {
+            try {
+                // CSS.escape is the proper way but might not be available in all environments
+                if (typeof CSS !== 'undefined' && CSS.escape) {
+                    // Split by spaces and escape each part separately to handle complex selectors
+                    return selector.split(/\s+/)
+                        .map(part => {
+                            // Handle ID and class selectors separately
+                            if (part.startsWith('#') || part.startsWith('.')) {
+                                const prefix = part.charAt(0);
+                                const value = part.substring(1);
+                                return prefix + CSS.escape(value);
+                            }
+                            return part;
+                        })
+                        .join(' ');
+                } else {
+                    // Fallback: manually escape special characters
+                    return selector.replace(/(:)/g, '\\$1');
+                }
+            } catch (e) {
+                console.error('Error escaping selector:', e);
+                return selector; // Return original if escaping fails
+            }
+        }
+        return selector;
+    }
+
 
     private async scrollToElement(element: Element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -144,23 +280,23 @@ export class AutomationHandler {
             }
 
             // Special case for GitHub repositories tab
-            if (action.selector === '#repositories-tab' || action.element_id === 'repositories-tab') {
-                console.log('Special case: Looking for repositories tab by various means');
+            // if (action.selector === '#repositories-tab' || action.element_id === 'repositories-tab') {
+            //     console.log('Special case: Looking for repositories tab by various means');
                 
-                // Try finding by aria-label
-                const repoTab = document.querySelector('[aria-label="Repositories"]') || 
-                                document.querySelector('[data-tab-item="repositories"]') ||
-                                Array.from(document.querySelectorAll('a')).find(a => 
-                                    a.textContent?.trim().toLowerCase() === 'repositories'
-                                );
+            //     // Try finding by aria-label
+            //     const repoTab = document.querySelector('[aria-label="Repositories"]') || 
+            //                     document.querySelector('[data-tab-item="repositories"]') ||
+            //                     Array.from(document.querySelectorAll('a')).find(a => 
+            //                         a.textContent?.trim().toLowerCase() === 'repositories'
+            //                     );
                 
-                if (repoTab && !element) {
-                    console.log('Found repositories tab by alternative means:', repoTab);
-                    await this.scrollToElement(repoTab);
-                    await this.simulateHumanClick(repoTab);
-                    return true;
-                }
-            }
+            //     if (repoTab && !element) {
+            //         console.log('Found repositories tab by alternative means:', repoTab);
+            //         await this.scrollToElement(repoTab);
+            //         await this.simulateHumanClick(repoTab);
+            //         return true;
+            //     }
+            // }
 
             switch (action.type) {
                 case 'click':
