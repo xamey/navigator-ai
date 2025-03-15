@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { axiosInstance } from './constants/AxiosInstance';
 import { DOMUpdate, Message, ProcessingStatus } from './types';
 
 console.log('Background script initializing...');
@@ -66,8 +67,9 @@ chrome.runtime.onMessage.addListener(async (message: Message, sender, sendRespon
 
     try {
         if (message.type === 'startTask') {
-            await handleStartTask(message, sendResponse);
-            return true; 
+            const result = await handleStartTask(message, sendResponse);
+            // sendResponse(result);
+            return result; 
         } else if (message.type === 'startMonitoring') {
             startMonitoring(message.task_id!);
             sendResponse({ success: true });
@@ -320,16 +322,15 @@ async function handleStartTask(message: Message, sendResponse: (response?: any) 
         }
 
         // Otherwise create a new task
-        console.log('Creating new task with server');
-        const response = await fetch(`${API_BASE_URL}/tasks/create`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ task: message.task }),
-        });
+        console.log('Creating new task with server - ', message.task);
+        const {data, status} = await axiosInstance.post('/tasks/create', { task: message.task });
 
-        const data = await response.json();
+        if (status !== 200) {
+            console.error('Error creating task:', data);
+            sendResponse({ error: 'Failed to create task' });
+            return;
+        }
+
         console.log('Task created successfully:', data.task_id);
 
         // Store the new session
@@ -343,6 +344,7 @@ async function handleStartTask(message: Message, sendResponse: (response?: any) 
         await chrome.storage.local.set({ activeSession });
 
         sendResponse({ task_id: data.task_id });
+        return;
     } catch (error) {
         console.error('Error creating task:', error);
         sendResponse({ error: 'Failed to create task' });

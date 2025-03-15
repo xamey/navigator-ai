@@ -124,6 +124,8 @@ export default function Sidebar() {
                 type: 'startTask',
                 task: state.task
             });
+            
+            console.log("Response from startTask:", response);
 
             if (response?.task_id) {
                 const newState: TaskState = {
