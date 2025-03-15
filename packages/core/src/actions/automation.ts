@@ -6,12 +6,42 @@ export class AutomationHandler {
 
         let element: Element | null = null;
 
+        // First try: element_id (highest priority)
         if (action.element_id) {
             element = document.getElementById(action.element_id);
             console.log(`Searching by ID "${action.element_id}": ${element ? 'Found' : 'Not found'}`);
         }
 
-        if (!element && action.selector) {
+        // Second try: if selector contains '#', try it before xpath
+        if (!element && action.selector && action.selector.includes('#')) {
+            try {
+                const escapedSelector = this.escapeSelector(action.selector);
+                element = document.querySelector(escapedSelector);
+                console.log(`Searching by ID selector "${escapedSelector}": ${element ? 'Found' : 'Not found'}`);
+            } catch (error) {
+                console.error(`Error with ID selector "${action.selector}":`, error);
+            }
+        }
+
+        // Third try: xpath_ref
+        if (!element && action.xpath_ref) {
+            try {
+                const result = document.evaluate(
+                    action.xpath_ref,
+                    document,
+                    null,
+                    XPathResult.FIRST_ORDERED_NODE_TYPE,
+                    null
+                );
+                element = result.singleNodeValue as Element;
+                console.log(`Searching by XPath "${action.xpath_ref}": ${element ? 'Found' : 'Not found'}`);
+            } catch (error) {
+                console.error(`Error evaluating XPath "${action.xpath_ref}":`, error);
+            }
+        }
+
+        // Fourth try: other selectors that don't contain '#'
+        if (!element && action.selector && !action.selector.includes('#')) {
             try {
                 const escapedSelector = this.escapeSelector(action.selector);
                 element = document.querySelector(escapedSelector);
@@ -30,22 +60,7 @@ export class AutomationHandler {
             }
         }
 
-        if (!element && action.xpath_ref) {
-            try {
-                const result = document.evaluate(
-                    action.xpath_ref,
-                    document,
-                    null,
-                    XPathResult.FIRST_ORDERED_NODE_TYPE,
-                    null
-                );
-                element = result.singleNodeValue as Element;
-                console.log(`Searching by XPath "${action.xpath_ref}": ${element ? 'Found' : 'Not found'}`);
-            } catch (error) {
-                console.error(`Error evaluating XPath "${action.xpath_ref}":`, error);
-            }
-        }
-
+        // Last try: text-based search
         if (!element && (action.text || action.type === 'click')) {
             const textToFind = action.text ||
                 (action.selector?.includes('repositories') ? 'Repositories' : '') ||
