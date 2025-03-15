@@ -56,7 +56,7 @@ export interface DOMHashMap {
 export type NodeType = Element | Text;
 
 export interface Action {
-    type: 'click' | 'scroll' | 'input' | 'navigate';
+    type: 'click' | 'scroll' | 'input' | 'navigate' | 'url';
     element_id?: string;
     xpath_ref?: string;
     selector?: string;
