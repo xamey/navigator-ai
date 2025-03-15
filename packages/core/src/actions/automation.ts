@@ -243,7 +243,7 @@ export class AutomationHandler {
             console.log('Executing action:', action.type, action);
 
             const element = await this.findElement(action);
-            if (!element && action.type !== 'navigate') {
+            if (!element && action.type !== 'navigate' && action.type !== 'url') {
                 console.error('Element not found for action:', action);
                 
                 if (retryCount < 2) {
@@ -276,6 +276,14 @@ export class AutomationHandler {
                     break;
 
                 case 'navigate':
+                    if (!action.url) return false;
+                    console.log(`Navigating to: ${action.url}`);
+                    window.location.href = action.url;
+                    // Wait longer for navigation to complete
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    break;
+                
+                case 'url':
                     if (!action.url) return false;
                     console.log(`Navigating to: ${action.url}`);
                     window.location.href = action.url;
