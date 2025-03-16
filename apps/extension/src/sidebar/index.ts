@@ -3,13 +3,52 @@ let isChromeWithSidePanelSupport: boolean = false;
 
 // Check if Chrome's sidePanel API is available
 export const isChromeSidePanelSupported = (): boolean => {
-    return !!chrome.sidePanel && typeof chrome.sidePanel.open === 'function';
+        return typeof chrome !== 'undefined' 
+            
 };
 
 // Initialize on script load
 (() => {
+    // First check if Chrome's sidePanel API is supported
     isChromeWithSidePanelSupport = isChromeSidePanelSupported();
     console.log('Chrome sidePanel API supported:', isChromeWithSidePanelSupport);
+    
+    // If not supported initially, wait for up to 5 seconds to see if it becomes available
+    if (!isChromeWithSidePanelSupport) {
+        console.log('Waiting for Chrome sidePanel API to become available...');
+        
+        let attempts = 0;
+        const maxAttempts = 10; // 10 attempts * 500ms = 5 seconds
+        const checkInterval = setInterval(() => {
+            attempts++;
+            isChromeWithSidePanelSupport = isChromeSidePanelSupported();
+            
+            if (isChromeWithSidePanelSupport || attempts >= maxAttempts) {
+                clearInterval(checkInterval);
+                console.log('Chrome sidePanel API available after waiting:', isChromeWithSidePanelSupport);
+                
+                // Initialize sidebar state in storage for Chrome sidePanel users
+                if (isChromeWithSidePanelSupport && chrome.storage) {
+                    chrome.storage.local.get(['sidePanelState'], (result) => {
+                        if (!result.sidePanelState) {
+                            // Set default state if not already set
+                            chrome.storage.local.set({ sidePanelState: 'closed' });
+                        }
+                    });
+                }
+            }
+        }, 500);
+    } else {
+        // Initialize sidebar state in storage for Chrome sidePanel users
+        if (chrome.storage) {
+            chrome.storage.local.get(['sidePanelState'], (result) => {
+                if (!result.sidePanelState) {
+                    // Set default state if not already set
+                    chrome.storage.local.set({ sidePanelState: 'closed' });
+                }
+            });
+        }
+    }
 })();
 
 export function createSidebarContainer(): HTMLElement {
@@ -82,8 +121,12 @@ export function updateSidebarState(isOpen: boolean): void {
         // Use Chrome's sidePanel API
         if (isOpen) {
             chrome.runtime.sendMessage({ type: 'openSidePanel' });
+            // Store state in Chrome storage
+            chrome.storage.local.set({ sidePanelState: 'open' });
         } else {
             chrome.runtime.sendMessage({ type: 'closeSidePanel' });
+            // Store state in Chrome storage
+            chrome.storage.local.set({ sidePanelState: 'closed' });
         }
         return;
     }
@@ -92,6 +135,9 @@ export function updateSidebarState(isOpen: boolean): void {
     if (!sidebarContainer) {
         sidebarContainer = createSidebarContainer();
     }
+
+    // Store state in Chrome storage (using sidebarOpen for non-Chrome browsers)
+    chrome.storage.local.set({ sidebarOpen: isOpen });
 
     if (isOpen) {
         sidebarContainer.style.width = '384px'; // w-96 in Tailwind
@@ -109,22 +155,50 @@ export function toggleSidebar(): boolean {
 
     if (isChromeWithSidePanelSupport) {
         // For Chrome, we'll toggle via background script
-        chrome.runtime.sendMessage({ type: 'toggleSidePanel' }, (response) => {
-            console.log('Toggled Chrome side panel:', response);
+        chrome.storage.local.get(['sidePanelState'], (result) => {
+            const currentState = result.sidePanelState || 'closed';
+            const newState = currentState === 'open' ? 'closed' : 'open';
+            
+            chrome.runtime.sendMessage({ type: 'toggleSidePanel' }, (response) => {
+                console.log('Toggled Chrome side panel:', response);
+            });
+            
+            // Update local state for components that might be checking it
+            chrome.storage.local.set({ sidePanelState: newState });
         });
         
-        // We don't know the current state immediately, so just return true
-        // The actual state will be managed by Chrome's sidePanel API
+        // Return true to indicate the action was handled
         return true;
     }
 
-    // Fallback to custom implementation
+    // Fallback to custom implementation for non-Chrome browsers
     if (!sidebarContainer) {
         sidebarContainer = createSidebarContainer();
     }
 
     const isCurrentlyOpen = sidebarContainer.classList.contains('sidebar-open');
     updateSidebarState(!isCurrentlyOpen);
+    
+    // Store state in local storage for consistency
+    chrome.storage.local.set({ sidebarOpen: !isCurrentlyOpen });
 
     return !isCurrentlyOpen;
+}
+
+/**
+ * Get the current sidebar state from storage.
+ * @param callback Callback function receiving the current state (true = open, false = closed)
+ */
+export function getSidebarState(callback: (isOpen: boolean) => void): void {
+    if (isChromeWithSidePanelSupport) {
+        // For Chrome's native sidePanel, check the sidePanelState
+        chrome.storage.local.get(['sidePanelState'], (result) => {
+            callback(result.sidePanelState === 'open');
+        });
+    } else {
+        // For custom sidebar, check the sidebarOpen flag
+        chrome.storage.local.get(['sidebarOpen'], (result) => {
+            callback(!!result.sidebarOpen);
+        });
+    }
 } 

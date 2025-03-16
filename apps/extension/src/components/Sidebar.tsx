@@ -6,6 +6,7 @@ type Tab = 'automation' | 'knowledge' | 'history' | 'settings';
 export default function Sidebar() {
     const [isOpen, setIsOpen] = useState(true);
     const [activeTab, setActiveTab] = useState<Tab>('automation');
+    const [isChromeWithSidePanel, setIsChromeWithSidePanel] = useState(false);
     const [state, setState] = useState<TaskState>({
         taskId: null,
         status: 'idle',
@@ -17,17 +18,30 @@ export default function Sidebar() {
 
     useEffect(() => {
         console.log('Sidebar component mounted');
+        
+        // Check if running in Chrome with sidePanel support
+        const checkChromeSupport = () => {
+            return typeof chrome !== 'undefined' && 
+                  !!chrome.sidePanel && 
+                  typeof chrome.sidePanel.open === 'function';
+        };
+        
+        setIsChromeWithSidePanel(checkChromeSupport());
 
-        chrome.storage.local.get(['taskState', 'sidebarOpen', 'activeTab', 'activeSession'], (result) => {
+        chrome.storage.local.get(['taskState', 'sidebarOpen', 'activeTab', 'activeSession', 'sidePanelState'], (result) => {
             console.log('Loaded from storage:', result);
 
             if (result.taskState) {
                 setState(result.taskState);
             }
 
-            if (result.sidebarOpen !== undefined) {
+            // For Chrome with sidePanel, use sidePanelState; otherwise use sidebarOpen
+            if (checkChromeSupport()) {
+                setIsOpen(result.sidePanelState === 'open');
+            } else if (result.sidebarOpen !== undefined) {
                 setIsOpen(result.sidebarOpen);
             }
+            
             if (result.activeTab) {
                 setActiveTab(result.activeTab as Tab);
             }
@@ -93,7 +107,12 @@ export default function Sidebar() {
     }, []);
 
     useEffect(() => {
-        chrome.storage.local.set({ sidebarOpen: isOpen });
+        // Use appropriate state storage based on browser
+        if (isChromeWithSidePanel) {
+            chrome.storage.local.set({ sidePanelState: isOpen ? 'open' : 'closed' });
+        } else {
+            chrome.storage.local.set({ sidebarOpen: isOpen });
+        }
 
         if (typeof chrome !== 'undefined' && chrome.tabs) {
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -107,7 +126,7 @@ export default function Sidebar() {
                 }
             });
         }
-    }, [isOpen]);
+    }, [isOpen, isChromeWithSidePanel]);
 
     useEffect(() => {
         chrome.storage.local.set({ activeTab });
@@ -252,11 +271,48 @@ export default function Sidebar() {
         }
     };
 
+    // Handle opening the sidebar/panel
+    const handleOpen = () => {
+        if (isChromeWithSidePanel) {
+            // For Chrome with sidePanel, directly use the API
+            chrome.sidePanel.setOptions({ enabled: true });
+            
+            // Try to get the current tab ID to open the panel in
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0] && tabs[0].id) {
+                    chrome.sidePanel.open({ tabId: tabs[0].id });
+                } else {
+                    // Fallback to current window
+                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+                }
+            });
+            
+            // Also update storage to maintain state
+            chrome.storage.local.set({ sidePanelState: 'open' });
+        }
+        
+        // Always update local state
+        setIsOpen(true);
+    };
+
+    // Handle closing the sidebar/panel
+    const handleClose = () => {
+        if (isChromeWithSidePanel) {
+            // For Chrome with sidePanel, directly use the API
+            chrome.sidePanel.setOptions({ enabled: false });
+            // Also update storage to maintain state
+            chrome.storage.local.set({ sidePanelState: 'closed' });
+        }
+        
+        // Always update local state
+        setIsOpen(false);
+    };
+
     if (!isOpen) {
         return (
             <div className="fixed top-20 right-0 z-50 flex flex-col gap-2">
                 <button
-                    onClick={() => setIsOpen(true)}
+                    onClick={handleOpen}
                     className="flex items-center justify-center w-12 h-12 bg-slate-800/90 hover:bg-slate-700/90 text-white rounded-l-lg border border-slate-700/50 border-r-0 shadow-lg transition-all duration-300"
                     title="Open Navigator AI"
                 >
@@ -304,7 +360,7 @@ export default function Sidebar() {
                         Navigator AI
                     </h2>
                     <button
-                        onClick={() => setIsOpen(false)}
+                        onClick={handleClose}
                         className="p-2 rounded-md text-slate-300 hover:text-white hover:bg-slate-600/90 focus:outline-none focus:ring-2 focus:ring-slate-400"
                         title="Close Sidebar"
                     >

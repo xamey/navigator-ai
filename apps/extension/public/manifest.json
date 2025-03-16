@@ -36,6 +36,8 @@
     }
   ],
   "side_panel": {
-    "default_path": "popup.html"
+    "default_path": "popup.html",
+    "default_title": "Navigator AI",
+    "enable_controls": true
   }
 }

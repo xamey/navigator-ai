@@ -42,12 +42,27 @@ function isValidUrl(url: string): boolean {
 
 // Initialize side panel settings
 chrome.runtime.onInstalled.addListener(() => {
+    console.log('Extension installed, setting up sidePanel...');
+    
     // Set the default state of the side panel
     if (chrome.sidePanel) {
+        console.log('Chrome sidePanel API available, configuring...');
+        
+        // Configure the sidePanel
         chrome.sidePanel.setOptions({
             enabled: true,
             path: 'popup.html'
         });
+        
+        // Initialize the state in storage
+        chrome.storage.local.get(['sidePanelState'], (result) => {
+            if (!result.sidePanelState) {
+                // Set default state if not already set
+                chrome.storage.local.set({ sidePanelState: 'closed' });
+            }
+        });
+    } else {
+        console.log('Chrome sidePanel API not available, will use custom sidebar implementation');
     }
 });
 

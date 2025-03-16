@@ -11,6 +11,9 @@ import { handleAutomationActions } from '../automation';
  * Initialize message listener for content script
  */
 export function initializeMessageListener(): void {
+    // Check if Chrome's sidePanel API is available
+    const isChromeWithSidePanel = isChromeSidePanelSupported();
+    
     chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
         console.log('Content script received message:', message.type);
 
@@ -20,9 +23,8 @@ export function initializeMessageListener(): void {
         }
         
         if (message.type === 'singleDOMProcess' && message.task_id) {
-            // We still create the container for non-Chrome browsers
-            // Chrome browsers will use the sidePanel API
-            if (!isChromeSidePanelSupported()) {
+            // Only create the custom container for non-Chrome browsers
+            if (!isChromeWithSidePanel) {
                 createSidebarContainer();
             }
             
@@ -55,9 +57,8 @@ export function initializeMessageListener(): void {
         }
 
         if (message.type === 'processDOM' && message.task_id) {
-            // We still create the container for non-Chrome browsers
-            // Chrome browsers will use the sidePanel API
-            if (!isChromeSidePanelSupported()) {
+            // Only create the custom container for non-Chrome browsers
+            if (!isChromeWithSidePanel) {
                 createSidebarContainer();
             }
             
@@ -69,15 +70,14 @@ export function initializeMessageListener(): void {
                     console.error('Error in processDOM:', error);
                     sendResponse({ 
                         success: false, 
-                        error: error instanceof Error ? error.message : String(error) 
+                        error: error instanceof Error ? error.message : String(error)
                     });
                 });
             return true; 
         }
         else if (message.type === 'startSequentialProcessing' && message.task_id) {
-            // We still create the container for non-Chrome browsers
-            // Chrome browsers will use the sidePanel API
-            if (!isChromeSidePanelSupported()) {
+            // Only create the custom container for non-Chrome browsers
+            if (!isChromeWithSidePanel) {
                 createSidebarContainer();
             }
             
@@ -96,7 +96,7 @@ export function initializeMessageListener(): void {
         }
         else if (message.type === 'toggleUI' || message.type === 'toggleSidebar') {
             // Use Chrome's sidePanel API if available, otherwise fall back to custom sidebar
-            if (isChromeSidePanelSupported()) {
+            if (isChromeWithSidePanel) {
                 // Forward the request to the background script which will handle the Chrome sidePanel API
                 chrome.runtime.sendMessage({ type: 'toggleSidePanel' }, (response) => {
                     sendResponse(response);
@@ -109,7 +109,7 @@ export function initializeMessageListener(): void {
         }
         else if (message.type === 'updateSidebarState') {
             // Use Chrome's sidePanel API if available, otherwise fall back to custom sidebar
-            if (isChromeSidePanelSupported()) {
+            if (isChromeWithSidePanel) {
                 // Forward to background script
                 if (message.isOpen) {
                     chrome.runtime.sendMessage({ type: 'openSidePanel' }, (response) => {
