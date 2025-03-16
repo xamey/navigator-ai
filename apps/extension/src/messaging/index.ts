@@ -2,7 +2,7 @@
 // Functions for handling messaging between content script and background script
 
 import { Message } from '../types';
-import { createSidebarContainer, toggleSidebar, updateSidebarState } from '../sidebar';
+import { createSidebarContainer, toggleSidebar, updateSidebarState, isChromeSidePanelSupported } from '../sidebar';
 import { processDOM, sequentialDOMProcessing, singleDOMProcessIteration } from '../dom/processor';
 import { clearAllHighlights } from '../highlight';
 import { handleAutomationActions } from '../automation';
@@ -11,6 +11,9 @@ import { handleAutomationActions } from '../automation';
  * Initialize message listener for content script
  */
 export function initializeMessageListener(): void {
+    // Check if Chrome's sidePanel API is available
+    const isChromeWithSidePanel = isChromeSidePanelSupported();
+    
     chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
         console.log('Content script received message:', message.type);
 
@@ -20,7 +23,10 @@ export function initializeMessageListener(): void {
         }
         
         if (message.type === 'singleDOMProcess' && message.task_id) {
-            createSidebarContainer(); 
+            // Only create the custom container for non-Chrome browsers
+            if (!isChromeWithSidePanel) {
+                createSidebarContainer();
+            }
             
             singleDOMProcessIteration(message.task_id)
                 .then((result) => {
@@ -51,7 +57,11 @@ export function initializeMessageListener(): void {
         }
 
         if (message.type === 'processDOM' && message.task_id) {
-            createSidebarContainer(); // Ensure container exists
+            // Only create the custom container for non-Chrome browsers
+            if (!isChromeWithSidePanel) {
+                createSidebarContainer();
+            }
+            
             processDOM(message.task_id)
                 .then((domData) => {
                     sendResponse({ success: true, domData });
@@ -60,13 +70,17 @@ export function initializeMessageListener(): void {
                     console.error('Error in processDOM:', error);
                     sendResponse({ 
                         success: false, 
-                        error: error instanceof Error ? error.message : String(error) 
+                        error: error instanceof Error ? error.message : String(error)
                     });
                 });
             return true; 
         }
         else if (message.type === 'startSequentialProcessing' && message.task_id) {
-            createSidebarContainer(); // Ensure container exists
+            // Only create the custom container for non-Chrome browsers
+            if (!isChromeWithSidePanel) {
+                createSidebarContainer();
+            }
+            
             sequentialDOMProcessing(message.task_id, message.maxIterations || 10)
                 .then((result) => {
                     sendResponse({ success: true, result });
@@ -81,13 +95,35 @@ export function initializeMessageListener(): void {
             return true; // Keep channel open for async response
         }
         else if (message.type === 'toggleUI' || message.type === 'toggleSidebar') {
-            const isVisible = toggleSidebar();
-            sendResponse({ success: true, isVisible });
+            // Use Chrome's sidePanel API if available, otherwise fall back to custom sidebar
+            if (isChromeWithSidePanel) {
+                // Forward the request to the background script which will handle the Chrome sidePanel API
+                chrome.runtime.sendMessage({ type: 'toggleSidePanel' }, (response) => {
+                    sendResponse(response);
+                });
+            } else {
+                const isVisible = toggleSidebar();
+                sendResponse({ success: true, isVisible });
+            }
             return true;
         }
         else if (message.type === 'updateSidebarState') {
-            updateSidebarState(message.isOpen || false);
-            sendResponse({ success: true });
+            // Use Chrome's sidePanel API if available, otherwise fall back to custom sidebar
+            if (isChromeWithSidePanel) {
+                // Forward to background script
+                if (message.isOpen) {
+                    chrome.runtime.sendMessage({ type: 'openSidePanel' }, (response) => {
+                        sendResponse(response);
+                    });
+                } else {
+                    chrome.runtime.sendMessage({ type: 'closeSidePanel' }, (response) => {
+                        sendResponse(response);
+                    });
+                }
+            } else {
+                updateSidebarState(message.isOpen || false);
+                sendResponse({ success: true });
+            }
             return true;
         }
         else if (message.type === 'resetWorkflow') {

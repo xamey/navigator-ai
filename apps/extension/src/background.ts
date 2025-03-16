@@ -40,8 +40,62 @@ function isValidUrl(url: string): boolean {
         !url.startsWith('brave://');
 }
 
+// Initialize side panel settings
+chrome.runtime.onInstalled.addListener(() => {
+    console.log('Extension installed, setting up sidePanel...');
+    
+    // Set the default state of the side panel
+    if (chrome.sidePanel) {
+        console.log('Chrome sidePanel API available, configuring...');
+        
+        // Configure the sidePanel
+        chrome.sidePanel.setOptions({
+            enabled: true,
+            path: 'popup.html'
+        });
+        
+        // Initialize the state in storage
+        chrome.storage.local.get(['sidePanelState'], (result) => {
+            if (!result.sidePanelState) {
+                // Set default state if not already set
+                chrome.storage.local.set({ sidePanelState: 'closed' });
+            }
+        });
+    } else {
+        console.log('Chrome sidePanel API not available, will use custom sidebar implementation');
+    }
+});
+
 chrome.action.onClicked.addListener((tab) => {
     console.log('Extension icon clicked, toggling sidebar in tab:', tab.id);
+    
+    // Check if Chrome's sidePanel API is available
+    if (chrome.sidePanel) {
+        // Check current state from storage
+        chrome.storage.local.get(['sidePanelState'], (result) => {
+            const isOpen = result.sidePanelState === 'open';
+            
+            // Toggle the sidePanel
+            if (isOpen) {
+                // The sidePanel API doesn't have a direct close method
+                // Instead, we set the panel to disabled
+                chrome.sidePanel.setOptions({ enabled: false });
+                chrome.storage.local.set({ sidePanelState: 'closed' });
+            } else {
+                // Enable and open the panel
+                chrome.sidePanel.setOptions({ enabled: true });
+                if (tab.id) {
+                    chrome.sidePanel.open({ tabId: tab.id });
+                } else {
+                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+                }
+                chrome.storage.local.set({ sidePanelState: 'open' });
+            }
+        });
+        return;
+    }
+    
+    // Fall back to the custom sidebar implementation for non-Chrome browsers
     if (tab.id && tab.url && isValidUrl(tab.url)) {
         chrome.tabs.sendMessage(tab.id, { type: 'toggleSidebar' })
             .catch(err => {
@@ -64,16 +118,17 @@ chrome.action.onClicked.addListener((tab) => {
 
 chrome.runtime.onMessage.addListener(async (message: Message, sender, sendResponse) => {
     console.log('Background received message:', message.type, sender?.tab?.id);
-
+    
     try {
+        // Handle different message types
         if (message.type === 'startTask') {
             const result = await handleStartTask(message, sendResponse);
-            // sendResponse(result);
-            return result; 
+            return result;
         } else if (message.type === 'startMonitoring') {
             startMonitoring(message.task_id!);
             sendResponse({ success: true });
         } else if (message.type === 'stopMonitoring') {
+            console.log('Received request to stop monitoring');
             stopMonitoring();
             sendResponse({ success: true });
         } else if (message.type === 'dom_update') {
@@ -267,24 +322,19 @@ async function handleDOMUpdate(message: Message) {
             await updateProcessingStatus(message.task_id, 'completed');
         }
         
-        // Only stop monitoring if is_done is true in the response
-        if (data.result?.is_done && activeSession) {
-            console.log('Task marked as done by the server, stopping monitoring');
-            activeSession.status = 'completed';
-            await chrome.storage.local.set({ activeSession });
-            
-            // Explicitly broadcast completion status
-            await updateProcessingStatus(message.task_id, 'completed');
-            chrome.runtime.sendMessage({
-                type: 'processingStatusUpdate',
-                task_id: message.task_id,
-                status: 'completed',
-                isDone: true
-            }).catch(err => console.error('Error broadcasting completion status:', err));
-            
-            stopMonitoring();
+        // Store the is_done flag but don't stop monitoring immediately
+        // This allows actions to be executed before stopping
+        const isDone = data.result?.is_done && activeSession;
+        
+        // Process this update normally and let the DOM processor handle the completion
+        // after executing any actions
+        
+        // Add the is_done flag to the console log for debugging
+        if (isDone) {
+            console.log('Task marked as done by the server, will stop after actions are executed');
         }
-
+        
+        // Explicitly set is_done in the response so it can be picked up by the processor
         return {
             success: true,
             data: data,

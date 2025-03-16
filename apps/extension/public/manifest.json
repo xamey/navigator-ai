@@ -20,7 +20,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "activeTab", "scripting", "sidePanel", "windows"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "content_scripts": [
     {
@@ -34,5 +34,10 @@
       "resources": ["popup.html", "assets/*"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "side_panel": {
+    "default_path": "popup.html",
+    "default_title": "Navigator AI",
+    "enable_controls": true
+  }
 }
