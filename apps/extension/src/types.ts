@@ -19,7 +19,7 @@ export interface DOMUpdate {
 }
 
 export interface Message {
-    type: 'startTask' | 'startMonitoring' | 'stopMonitoring' | 'processDOM' | 'toggleSidebar' | 'toggleUI' | 'updateSidebarState' | 'dom_update' | 'pauseMonitoring' | 'resumeMonitoring' | 'executeActions' | 'startSequentialProcessing' | 'check_processing_status' | 'resetIterations' | 'singleDOMProcess' | 'ping' | 'resetWorkflow' | 'checkDomainChange' | 'updateProcessingStatus';
+    type: 'startTask' | 'startMonitoring' | 'stopMonitoring' | 'processDOM' | 'toggleSidebar' | 'toggleUI' | 'updateSidebarState' | 'dom_update' | 'pauseMonitoring' | 'resumeMonitoring' | 'executeActions' | 'startSequentialProcessing' | 'check_processing_status' | 'resetIterations' | 'singleDOMProcess' | 'ping' | 'resetWorkflow' | 'checkDomainChange' | 'updateProcessingStatus' | 'openSidePanel' | 'closeSidePanel' | 'toggleSidePanel';
     task?: string;
     task_id?: string;
     dom_data?: FrontendDOMState;

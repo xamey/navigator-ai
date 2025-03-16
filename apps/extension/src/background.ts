@@ -40,8 +40,47 @@ function isValidUrl(url: string): boolean {
         !url.startsWith('brave://');
 }
 
+// Initialize side panel settings
+chrome.runtime.onInstalled.addListener(() => {
+    // Set the default state of the side panel
+    if (chrome.sidePanel) {
+        chrome.sidePanel.setOptions({
+            enabled: true,
+            path: 'popup.html'
+        });
+    }
+});
+
 chrome.action.onClicked.addListener((tab) => {
     console.log('Extension icon clicked, toggling sidebar in tab:', tab.id);
+    
+    // Check if Chrome's sidePanel API is available
+    if (chrome.sidePanel) {
+        // Check current state from storage
+        chrome.storage.local.get(['sidePanelState'], (result) => {
+            const isOpen = result.sidePanelState === 'open';
+            
+            // Toggle the sidePanel
+            if (isOpen) {
+                // The sidePanel API doesn't have a direct close method
+                // Instead, we set the panel to disabled
+                chrome.sidePanel.setOptions({ enabled: false });
+                chrome.storage.local.set({ sidePanelState: 'closed' });
+            } else {
+                // Enable and open the panel
+                chrome.sidePanel.setOptions({ enabled: true });
+                if (tab.id) {
+                    chrome.sidePanel.open({ tabId: tab.id });
+                } else {
+                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+                }
+                chrome.storage.local.set({ sidePanelState: 'open' });
+            }
+        });
+        return;
+    }
+    
+    // Fall back to the custom sidebar implementation for non-Chrome browsers
     if (tab.id && tab.url && isValidUrl(tab.url)) {
         chrome.tabs.sendMessage(tab.id, { type: 'toggleSidebar' })
             .catch(err => {
@@ -66,6 +105,72 @@ chrome.runtime.onMessage.addListener(async (message: Message, sender, sendRespon
     console.log('Background received message:', message.type, sender?.tab?.id);
 
     try {
+        // Handle sidePanel-related messages
+        if (message.type === 'openSidePanel') {
+            if (chrome.sidePanel) {
+                // Enable the side panel
+                chrome.sidePanel.setOptions({ enabled: true });
+                
+                // Open the panel in the current tab if possible
+                const tabId = sender?.tab?.id;
+                if (tabId) {
+                    chrome.sidePanel.open({ tabId });
+                } else {
+                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+                }
+                
+                chrome.storage.local.set({ sidePanelState: 'open' });
+                sendResponse({ success: true });
+            } else {
+                console.log('Chrome sidePanel API not available');
+                sendResponse({ success: false, error: 'Chrome sidePanel API not available' });
+            }
+            return true;
+        } else if (message.type === 'closeSidePanel') {
+            if (chrome.sidePanel) {
+                // The sidePanel API doesn't have a direct close method
+                // Instead, we set the panel to disabled
+                chrome.sidePanel.setOptions({ enabled: false });
+                chrome.storage.local.set({ sidePanelState: 'closed' });
+                sendResponse({ success: true });
+            } else {
+                console.log('Chrome sidePanel API not available');
+                sendResponse({ success: false, error: 'Chrome sidePanel API not available' });
+            }
+            return true;
+        } else if (message.type === 'toggleSidePanel') {
+            // For toggling, we need to check the current state first
+            chrome.storage.local.get(['sidePanelState'], (result) => {
+                const isOpen = result.sidePanelState === 'open';
+                const tabId = sender?.tab?.id;
+                
+                if (chrome.sidePanel) {
+                    if (isOpen) {
+                        // Disable the panel
+                        chrome.sidePanel.setOptions({ enabled: false });
+                        chrome.storage.local.set({ sidePanelState: 'closed' });
+                    } else {
+                        // Enable the panel
+                        chrome.sidePanel.setOptions({ enabled: true });
+                        
+                        // Open the panel in the current tab if possible
+                        if (tabId) {
+                            chrome.sidePanel.open({ tabId });
+                        } else {
+                            chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+                        }
+                        
+                        chrome.storage.local.set({ sidePanelState: 'open' });
+                    }
+                    sendResponse({ success: true, isOpen: !isOpen });
+                } else {
+                    console.log('Chrome sidePanel API not available');
+                    sendResponse({ success: false, error: 'Chrome sidePanel API not available' });
+                }
+            });
+            return true;
+        }
+        
         if (message.type === 'startTask') {
             const result = await handleStartTask(message, sendResponse);
             // sendResponse(result);
