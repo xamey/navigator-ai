@@ -4,11 +4,16 @@
 import { DOMElementNode, DOMHashMap, DOMNode } from '@navigator-ai/core';
 import { getElementByXPathIncludingIframes } from '../utils';
 
-// Colors for highlighting different elements
+// Colors for highlighting different elements - modern, semi-transparent colors with good contrast
 const colors = [
-    "#FF0000", "#00FF00", "#0000FF", "#FFA500",
-    "#800080", "#008080", "#FF69B4", "#4B0082",
-    "#FF4500", "#2E8B57", "#DC143C", "#4682B4",
+    "rgba(66, 133, 244, 0.7)",   // Google Blue
+    "rgba(234, 67, 53, 0.7)",    // Google Red
+    "rgba(52, 168, 83, 0.7)",    // Google Green
+    "rgba(251, 188, 5, 0.7)",    // Google Yellow
+    "rgba(149, 117, 205, 0.7)",  // Purple
+    "rgba(59, 178, 208, 0.7)",   // Teal
+    "rgba(240, 98, 146, 0.7)",   // Pink
+    "rgba(255, 145, 0, 0.7)",    // Orange
 ];
 
 /**
@@ -76,12 +81,17 @@ export function highlightInteractiveElements(domStructure: DOMHashMap): void {
                             parentDocument.head.appendChild(styleEl);
                         }
                         
-                        // Add the highlight class style
+                        // Add the highlight class style with improved styling
                         const color = colors[index % colors.length];
                         styleEl.textContent += `
                             .navigator-ai-highlight-${index} {
-                                outline: 2px solid ${color} !important;
-                                outline-offset: 2px !important;
+                                outline: 3px solid ${color} !important;
+                                outline-offset: 3px !important;
+                                box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3) !important;
+                                transition: outline 0.2s ease-in-out !important;
+                            }
+                            .navigator-ai-highlight-${index}:hover {
+                                outline-width: 4px !important;
                             }
                         `;
                         
@@ -93,9 +103,20 @@ export function highlightInteractiveElements(domStructure: DOMHashMap): void {
                     }
                 } else {
                     // For regular document elements, apply style directly
-                    highlightedElement.style.outline = `2px solid ${colors[index % colors.length]}`;
-                    highlightedElement.style.outlineOffset = '2px';
+                    const color = colors[index % colors.length];
+                    highlightedElement.style.outline = `3px solid ${color}`;
+                    highlightedElement.style.outlineOffset = '3px';
+                    highlightedElement.style.boxShadow = '0 0 0 1px rgba(255, 255, 255, 0.3)';
+                    highlightedElement.style.transition = 'outline 0.2s ease-in-out';
                     highlightedElement.classList.add('navigator-ai-highlight');
+                    
+                    // Add hover effect with event listeners
+                    highlightedElement.addEventListener('mouseenter', () => {
+                        highlightedElement.style.outlineWidth = '4px';
+                    });
+                    highlightedElement.addEventListener('mouseleave', () => {
+                        highlightedElement.style.outlineWidth = '3px';
+                    });
                 }
             }
         } catch (error) {
@@ -114,6 +135,15 @@ export function clearAllHighlights(): void {
         if (el instanceof HTMLElement) {
             el.style.outline = '';
             el.style.outlineOffset = '';
+            el.style.boxShadow = '';
+            el.style.transition = '';
+            
+            // Remove event listeners (using clone technique to ensure all are removed)
+            const clone = el.cloneNode(true);
+            if (el.parentNode) {
+                el.parentNode.replaceChild(clone, el);
+            }
+            
             // Remove all navigator-ai-highlight classes
             el.className = el.className
                 .split(' ')
@@ -140,6 +170,15 @@ export function clearAllHighlights(): void {
                     if (el instanceof HTMLElement) {
                         el.style.outline = '';
                         el.style.outlineOffset = '';
+                        el.style.boxShadow = '';
+                        el.style.transition = '';
+                        
+                        // Remove event listeners (using clone technique to ensure all are removed)
+                        const clone = el.cloneNode(true);
+                        if (el.parentNode) {
+                            el.parentNode.replaceChild(clone, el);
+                        }
+                        
                         // Remove all navigator-ai-highlight classes
                         el.className = el.className
                             .split(' ')
