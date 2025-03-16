@@ -118,82 +118,17 @@ chrome.action.onClicked.addListener((tab) => {
 
 chrome.runtime.onMessage.addListener(async (message: Message, sender, sendResponse) => {
     console.log('Background received message:', message.type, sender?.tab?.id);
-
+    
     try {
-        // Handle sidePanel-related messages
-        if (message.type === 'openSidePanel') {
-            if (chrome.sidePanel) {
-                // Enable the side panel
-                chrome.sidePanel.setOptions({ enabled: true });
-                
-                // Open the panel in the current tab if possible
-                const tabId = sender?.tab?.id;
-                if (tabId) {
-                    chrome.sidePanel.open({ tabId });
-                } else {
-                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
-                }
-                
-                chrome.storage.local.set({ sidePanelState: 'open' });
-                sendResponse({ success: true });
-            } else {
-                console.log('Chrome sidePanel API not available');
-                sendResponse({ success: false, error: 'Chrome sidePanel API not available' });
-            }
-            return true;
-        } else if (message.type === 'closeSidePanel') {
-            if (chrome.sidePanel) {
-                // The sidePanel API doesn't have a direct close method
-                // Instead, we set the panel to disabled
-                chrome.sidePanel.setOptions({ enabled: false });
-                chrome.storage.local.set({ sidePanelState: 'closed' });
-                sendResponse({ success: true });
-            } else {
-                console.log('Chrome sidePanel API not available');
-                sendResponse({ success: false, error: 'Chrome sidePanel API not available' });
-            }
-            return true;
-        } else if (message.type === 'toggleSidePanel') {
-            // For toggling, we need to check the current state first
-            chrome.storage.local.get(['sidePanelState'], (result) => {
-                const isOpen = result.sidePanelState === 'open';
-                const tabId = sender?.tab?.id;
-                
-                if (chrome.sidePanel) {
-                    if (isOpen) {
-                        // Disable the panel
-                        chrome.sidePanel.setOptions({ enabled: false });
-                        chrome.storage.local.set({ sidePanelState: 'closed' });
-                    } else {
-                        // Enable the panel
-                        chrome.sidePanel.setOptions({ enabled: true });
-                        
-                        // Open the panel in the current tab if possible
-                        if (tabId) {
-                            chrome.sidePanel.open({ tabId });
-                        } else {
-                            chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
-                        }
-                        
-                        chrome.storage.local.set({ sidePanelState: 'open' });
-                    }
-                    sendResponse({ success: true, isOpen: !isOpen });
-                } else {
-                    console.log('Chrome sidePanel API not available');
-                    sendResponse({ success: false, error: 'Chrome sidePanel API not available' });
-                }
-            });
-            return true;
-        }
-        
+        // Handle different message types
         if (message.type === 'startTask') {
             const result = await handleStartTask(message, sendResponse);
-            // sendResponse(result);
-            return result; 
+            return result;
         } else if (message.type === 'startMonitoring') {
             startMonitoring(message.task_id!);
             sendResponse({ success: true });
         } else if (message.type === 'stopMonitoring') {
+            console.log('Received request to stop monitoring');
             stopMonitoring();
             sendResponse({ success: true });
         } else if (message.type === 'dom_update') {
@@ -387,24 +322,19 @@ async function handleDOMUpdate(message: Message) {
             await updateProcessingStatus(message.task_id, 'completed');
         }
         
-        // Only stop monitoring if is_done is true in the response
-        if (data.result?.is_done && activeSession) {
-            console.log('Task marked as done by the server, stopping monitoring');
-            activeSession.status = 'completed';
-            await chrome.storage.local.set({ activeSession });
-            
-            // Explicitly broadcast completion status
-            await updateProcessingStatus(message.task_id, 'completed');
-            chrome.runtime.sendMessage({
-                type: 'processingStatusUpdate',
-                task_id: message.task_id,
-                status: 'completed',
-                isDone: true
-            }).catch(err => console.error('Error broadcasting completion status:', err));
-            
-            stopMonitoring();
+        // Store the is_done flag but don't stop monitoring immediately
+        // This allows actions to be executed before stopping
+        const isDone = data.result?.is_done && activeSession;
+        
+        // Process this update normally and let the DOM processor handle the completion
+        // after executing any actions
+        
+        // Add the is_done flag to the console log for debugging
+        if (isDone) {
+            console.log('Task marked as done by the server, will stop after actions are executed');
         }
-
+        
+        // Explicitly set is_done in the response so it can be picked up by the processor
         return {
             success: true,
             data: data,

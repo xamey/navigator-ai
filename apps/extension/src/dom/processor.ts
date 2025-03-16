@@ -1,4 +1,5 @@
 import { parseDOMonServer } from '@navigator-ai/core';
+import { Action } from '@navigator-ai/core';
 import { FrontendDOMState, ProcessingStatus } from '../types';
 import { captureIframeContents } from './iframe';
 import { highlightInteractiveElements } from '../highlight';
@@ -213,24 +214,8 @@ export async function singleDOMProcessIteration(task_id: string): Promise<{
         // Check if backend signaled to complete
         const isDone = !!updateResult.data?.result?.is_done;
         
-        // If is_done is set to true, update activeSession in storage directly
-        if (isDone) {
-            console.log('Server indicated workflow is complete (is_done=true)');
-            await chrome.storage.local.get(['activeSession'], async (result) => {
-                if (result.activeSession) {
-                    await chrome.storage.local.set({
-                        activeSession: {
-                            ...result.activeSession,
-                            status: 'completed'
-                        }
-                    });
-                    console.log('Updated activeSession.status to completed');
-                }
-            });
-        }
-        
         // Step 3: Handle any actions returned from the server
-        if (updateResult.data?.result?.actions?.length > 0) {
+        if (updateResult.data?.result?.actions && updateResult.data.result.actions.length > 0) {
             console.log('Executing actions from update response');
             const actions = updateResult.data.result.actions;
             
@@ -273,6 +258,35 @@ export async function singleDOMProcessIteration(task_id: string): Promise<{
                 task_id,
                 status: 'completed'
             });
+        }
+        
+        // If is_done is set to true, update activeSession in storage AFTER executing actions
+        if (isDone) {
+            console.log('Server indicated workflow is complete (is_done=true)');
+            await chrome.storage.local.get(['activeSession'], async (result) => {
+                if (result.activeSession) {
+                    await chrome.storage.local.set({
+                        activeSession: {
+                            ...result.activeSession,
+                            status: 'completed'
+                        }
+                    });
+                    console.log('Updated activeSession.status to completed');
+                }
+            });
+            
+            // Explicitly broadcast completion status
+            await chrome.runtime.sendMessage({
+                type: 'processingStatusUpdate',
+                task_id,
+                status: 'completed' as ProcessingStatus,
+                isDone: true
+            }).catch(err => console.error('Error broadcasting completion status:', err));
+            
+            // Send a message to stop monitoring
+            await chrome.runtime.sendMessage({
+                type: 'stopMonitoring'
+            }).catch(err => console.error('Error stopping monitoring:', err));
         }
         
         console.log('Is this iteration the final one?', isDone);
@@ -471,7 +485,12 @@ export async function waitForProcessingStatus(
  */
 export async function getLatestUpdateResult(task_id: string): Promise<{
     success: boolean;
-    data?: any;
+    data?: {
+        result?: {
+            actions?: Action[];
+            is_done?: boolean;
+        };
+    };
     error?: string;
 }> {
     const result = await chrome.storage.local.get(['currentDOMUpdate', 'lastUpdateResponse']);
