@@ -1,4 +1,8 @@
 import { Action } from '../types';
+import { AutomationOptions } from '../types/automation';
+import { CursorManager } from '../utils/cursor';
+import { ElementFinder } from '../utils/element-finder';
+import { DomActions } from '../utils/dom-actions';
 
 declare global {
     interface Window {
@@ -14,7 +18,6 @@ declare global {
             getHandler: () => AutomationHandler;
             initHandler: () => AutomationHandler;
         };
-        // Global function to ensure handler is always available
         getNavigatorCursor: () => AutomationHandler;
         initNavigatorCursor: () => AutomationHandler;
     }
@@ -36,23 +39,38 @@ export interface IAutomationHandler {
 let globalHandlerInstance: AutomationHandler | null = null;
 
 // Initialize the automation handler (for direct imports)
-export function initAutomationHandler(options?: { debug?: boolean, cursorSize?: number }): IAutomationHandler {
+export function initAutomationHandler(options?: AutomationOptions): IAutomationHandler {
     return AutomationHandler.getInstance(options);
 }
 
 export class AutomationHandler implements IAutomationHandler {
-    private cursorElement: HTMLImageElement | null = null;
-    private debugMode = false; // Set to true to enable additional debug logging
-    private cursorSize = 32; // Default size in pixels
-    
-    constructor(options?: { debug?: boolean, cursorSize?: number }) {
+    cursorManager: CursorManager;
+    elementFinder: ElementFinder;
+    domActions: DomActions;
+    debugMode = false; // Set to true to enable additional debug logging
+    cursorSize = 32; // Default size in pixels
+
+    constructor(options?: AutomationOptions) {
         // Set options
         this.debugMode = options?.debug ?? false;
         this.cursorSize = options?.cursorSize ?? 32;
-        
+
+        this.cursorManager = new CursorManager({
+            debug: this.debugMode,
+            cursorSize: this.cursorSize
+        });
+
+        this.elementFinder = new ElementFinder({
+            debug: this.debugMode
+        });
+
+        this.domActions = new DomActions({
+            debug: this.debugMode
+        });
+
         // Store as singleton instance
         globalHandlerInstance = this;
-        
+
         // Expose instance to window for debugging
         if (typeof window !== 'undefined') {
             // Ensure navigatorAI exists
@@ -88,7 +106,7 @@ export class AutomationHandler implements IAutomationHandler {
                     return globalHandlerInstance;
                 };
             }
-            
+
             // Add global getter function
             window.getNavigatorCursor = () => {
                 if (!globalHandlerInstance) {
@@ -97,7 +115,7 @@ export class AutomationHandler implements IAutomationHandler {
                 }
                 return globalHandlerInstance;
             };
-            
+
             // Add global init function
             window.initNavigatorCursor = () => {
                 console.log('Initializing Navigator AI cursor');
@@ -108,81 +126,45 @@ export class AutomationHandler implements IAutomationHandler {
                 return globalHandlerInstance;
             };
         }
-        
+
         // Create the cursor element when AutomationHandler is instantiated
         this.initializeCursor();
     }
-    
+
     /**
      * Ensure the cursor is visible (useful for debugging)
      */
     public ensureCursorVisible(): void {
-        if (!this.cursorElement) {
-            this.initializeCursor();
-        }
-        
-        if (this.cursorElement) {
-            console.log('Setting cursor to visible in center of screen');
-            
-            // In case the cursor was removed from DOM
-            if (!document.body.contains(this.cursorElement)) {
-                document.body.appendChild(this.cursorElement);
-            }
-            
-            // Show cursor at center of screen
-            this.cursorElement.style.transition = 'none';
-            this.cursorElement.style.left = `${window.innerWidth / 2}px`;
-            this.cursorElement.style.top = `${window.innerHeight / 2}px`;
-            this.cursorElement.style.display = 'block';
-            this.cursorElement.style.opacity = '1';
-            
-            // Make cursor larger for testing
-            this.cursorElement.style.width = `${this.cursorSize * 1.5}px`;
-            this.cursorElement.style.height = `${this.cursorSize * 1.5}px`;
-            
-            // Add animation to make cursor obvious
-            this.cursorElement.animate([
-                { transform: 'translate(-50%, -50%) scale(1)', filter: 'brightness(1)' },
-                { transform: 'translate(-50%, -50%) scale(2)', filter: 'brightness(1.5)' },
-                { transform: 'translate(-50%, -50%) scale(1)', filter: 'brightness(1)' }
-            ], {
-                duration: 800,
-                iterations: 2
-            });
-            
-            // Reset cursor after animation
-            setTimeout(() => {
-                if (this.cursorElement) {
-                    this.cursorElement.style.width = `${this.cursorSize}px`;
-                    this.cursorElement.style.height = `${this.cursorSize}px`;
-                }
-            }, 1600);
-        }
+        this.cursorManager.ensureCursorVisible();
     }
-    
+
     /**
      * Static method to get or create an instance
      */
-    public static getInstance(options?: { debug?: boolean, cursorSize?: number }): AutomationHandler {
+    public static getInstance(options?: AutomationOptions): AutomationHandler {
         if (!globalHandlerInstance) {
             globalHandlerInstance = new AutomationHandler(options);
         }
         return globalHandlerInstance;
     }
-    
+
     /**
      * Enable or disable debug mode
      * @param enable Whether to enable debug mode
      */
     public setDebugMode(enable: boolean): void {
         this.debugMode = enable;
-        
+
+        this.cursorManager.setDebugMode(enable);
+        this.elementFinder.setDebugMode(enable);
+        this.domActions.setDebugMode(enable);
+
         if (typeof window !== 'undefined' && window.navigatorAI) {
             window.navigatorAI.debugMode = enable;
         }
-        
+
         console.log(`Navigator AI debug mode ${enable ? 'enabled' : 'disabled'}`);
-        
+
         // Update debug overlay if debug mode was enabled
         if (enable) {
             const existingOverlay = document.getElementById('navigator-ai-debug');
@@ -211,66 +193,39 @@ export class AutomationHandler implements IAutomationHandler {
             }
         }
     }
-    
+
     /**
      * Set cursor size
      * @param size Size in pixels
      */
     public setCursorSize(size: number): void {
         this.cursorSize = size;
-        
-        if (this.cursorElement) {
-            this.cursorElement.style.width = `${size}px`;
-            this.cursorElement.style.height = `${size}px`;
-        }
-        
+        this.cursorManager.setCursorSize(size);
+
         if (typeof window !== 'undefined' && window.navigatorAI) {
             window.navigatorAI.cursorSize = size;
         }
-        
+
         console.log(`Navigator AI cursor size set to ${size}px`);
     }
-    
+
     private initializeCursor(): void {
         // Check if we're in a browser environment
         if (typeof document === 'undefined') return;
-        
+
         try {
             // Remove any existing cursor element to avoid duplicates
             const existingCursor = document.getElementById('navigator-ai-cursor');
             if (existingCursor && existingCursor.parentNode) {
                 existingCursor.parentNode.removeChild(existingCursor);
             }
-            
+
             // Create cursor element using an image instead of a div with styling
-            this.cursorElement = document.createElement('img');
-            this.cursorElement.id = 'navigator-ai-cursor';
-            
-            // Get URL for the cursor image, falling back to a data URL if chrome isn't available
-            if (window.chrome && window.chrome.runtime) {
-                this.cursorElement.src = window.chrome.runtime.getURL('assets/icon/cursor.png');
-            } else {
-                // Fallback to an inline cursor using data URL
-                this.cursorElement.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxNiIgY3k9IjE2IiByPSIxNCIgZmlsbD0icmdiYSg3NSwgMjAwLCAyNTUsIDAuNSkiIHN0cm9rZT0icmdiKDAsIDE1MCwgMjU1KSIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9zdmc+';
-            }
-            
-            this.cursorElement.style.position = 'fixed';
-            this.cursorElement.style.width = `${this.cursorSize}px`;
-            this.cursorElement.style.height = `${this.cursorSize}px`;
-            this.cursorElement.style.pointerEvents = 'none'; // Ensure it doesn't interfere with user interactions
-            this.cursorElement.style.zIndex = '2147483647'; // Maximum z-index value
-            this.cursorElement.style.transform = 'translate(-50%, -50%)';
-            this.cursorElement.style.transition = 'all 0.3s ease-out';
-            this.cursorElement.style.display = 'none';
-            this.cursorElement.style.filter = 'drop-shadow(0 0 5px rgba(0, 150, 255, 0.8))';
-            this.cursorElement.style.willChange = 'transform, left, top'; // Performance optimization
-            
-            // Add cursor to body
-            document.body.appendChild(this.cursorElement);
-            
+            this.cursorManager.initializeCursor();
+
             if (this.debugMode) {
-                console.log('Navigator AI cursor initialized', this.cursorElement);
-                
+                console.log('Navigator AI cursor initialized', this.cursorManager.cursorElement);
+
                 // Create a debug overlay
                 const debugOverlay = document.createElement('div');
                 debugOverlay.id = 'navigator-ai-debug';
@@ -291,47 +246,47 @@ export class AutomationHandler implements IAutomationHandler {
             console.error('Failed to initialize cursor:', error);
         }
     }
-    
+
     private async moveCursorToElement(element: Element): Promise<void> {
-        if (!this.cursorElement) {
+        if (!this.cursorManager.cursorElement) {
             this.initializeCursor();
         }
-        
-        if (!this.cursorElement) {
+
+        if (!this.cursorManager.cursorElement) {
             if (this.debugMode) console.error('Cursor element is null after initialization attempt');
             return; // In case initialization failed
         }
-        
+
         try {
             // Get the bounding rect of the element
             const rect = element.getBoundingClientRect();
-            
+
             // Calculate the center position
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
-            
+
             if (this.debugMode) {
                 console.log(`Moving cursor to element at (${centerX}, ${centerY})`, element);
             }
-            
+
             // Make the cursor visible
-            this.cursorElement.style.display = 'block';
-            
+            this.cursorManager.cursorElement.style.display = 'block';
+
             // First position without animation
-            this.cursorElement.style.transition = 'none';
-            this.cursorElement.style.left = `${window.innerWidth / 2}px`;
-            this.cursorElement.style.top = `${window.innerHeight / 2}px`;
-            
+            this.cursorManager.cursorElement.style.transition = 'none';
+            this.cursorManager.cursorElement.style.left = `${window.innerWidth / 2}px`;
+            this.cursorManager.cursorElement.style.top = `${window.innerHeight / 2}px`;
+
             // Force reflow to ensure the initial position takes effect
-            void this.cursorElement.offsetWidth;
-            
+            void this.cursorManager.cursorElement.offsetWidth;
+
             // Restore animation and move to target
-            this.cursorElement.style.transition = 'all 0.5s cubic-bezier(0.19, 1, 0.22, 1)';
-            this.cursorElement.style.left = `${centerX}px`;
-            this.cursorElement.style.top = `${centerY}px`;
-            
+            this.cursorManager.cursorElement.style.transition = 'all 0.5s cubic-bezier(0.19, 1, 0.22, 1)';
+            this.cursorManager.cursorElement.style.left = `${centerX}px`;
+            this.cursorManager.cursorElement.style.top = `${centerY}px`;
+
             // Use animations for cursor effects
-            this.cursorElement.animate([
+            this.cursorManager.cursorElement.animate([
                 { transform: 'translate(-50%, -50%) scale(0.8)', opacity: 0.7 },
                 { transform: 'translate(-50%, -50%) scale(1.2)', opacity: 1 },
                 { transform: 'translate(-50%, -50%) scale(1)', opacity: 0.9 }
@@ -339,20 +294,20 @@ export class AutomationHandler implements IAutomationHandler {
                 duration: 600,
                 iterations: 1
             });
-            
+
             // Wait for the cursor to arrive at its destination
             await new Promise(resolve => setTimeout(resolve, 600));
         } catch (error) {
             console.error('Error moving cursor to element:', error);
         }
     }
-    
+
     private hideCursor(): void {
-        if (!this.cursorElement) return;
-        
+        if (!this.cursorManager.cursorElement) return;
+
         try {
             // Animate the cursor fading out
-            this.cursorElement.animate([
+            this.cursorManager.cursorElement.animate([
                 { opacity: 1 },
                 { opacity: 0 }
             ], {
@@ -360,13 +315,13 @@ export class AutomationHandler implements IAutomationHandler {
                 easing: 'ease-out',
                 fill: 'forwards'
             });
-            
+
             // Actually hide the cursor after animation completes
             setTimeout(() => {
-                if (this.cursorElement) {
-                    this.cursorElement.style.display = 'none';
+                if (this.cursorManager.cursorElement) {
+                    this.cursorManager.cursorElement.style.display = 'none';
                     // Reset opacity after hiding
-                    this.cursorElement.style.opacity = '1';
+                    this.cursorManager.cursorElement.style.opacity = '1';
                 }
             }, 300);
         } catch (error) {
@@ -374,7 +329,7 @@ export class AutomationHandler implements IAutomationHandler {
             if (this.debugMode) {
                 console.error('Error hiding cursor with animation:', error);
             }
-            this.cursorElement.style.display = 'none';
+            this.cursorManager.cursorElement.style.display = 'none';
         }
     }
 
@@ -470,7 +425,7 @@ export class AutomationHandler implements IAutomationHandler {
                 });
 
                 if (elementsWithText.length > 0) {
-                    const visibleElements = elementsWithText.filter(el => this.isElementVisible(el as Element));
+                    const visibleElements = elementsWithText.filter(el => this.elementFinder.isElementVisible(el as Element));
                     element = visibleElements.length > 0 ? visibleElements[0] as Element : elementsWithText[0] as Element;
                     console.log(`Found element by text content:`, element);
                 }
@@ -505,14 +460,14 @@ export class AutomationHandler implements IAutomationHandler {
             }
         }
 
-        if (element && !this.isElementVisible(element)) {
+        if (element && !this.elementFinder.isElementVisible(element)) {
             console.log('Element found but not visible, looking for alternatives');
 
             if (action.type === 'click') {
                 const parent = element.parentElement;
                 if (parent) {
                     const nearbyElements = Array.from(parent.querySelectorAll('a, button, [role="button"], input[type="submit"]'))
-                        .filter(el => this.isElementVisible(el as Element));
+                        .filter(el => this.elementFinder.isElementVisible(el as Element));
 
                     if (nearbyElements.length > 0) {
                         element = nearbyElements[0] as Element;
@@ -532,30 +487,30 @@ export class AutomationHandler implements IAutomationHandler {
     }
 
     private isElementVisible(element: Element): boolean {
-    if (!element || !(element instanceof HTMLElement)) return false;
-    
-    const style = window.getComputedStyle(element);
-    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-        return false;
+        if (!element || !(element instanceof HTMLElement)) return false;
+
+        const style = window.getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+            return false;
+        }
+
+        // Check if element has zero size
+        const rect = element.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            return false;
+        }
+
+        // Check if element is within viewport
+        const isInViewport = (
+            rect.top >= 0 &&
+            rect.left >= 0 &&
+            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+        );
+
+        // Element might still be valid even if not in viewport, but we prioritize visible elements
+        return true;
     }
-    
-    // Check if element has zero size
-    const rect = element.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) {
-        return false;
-    }
-    
-    // Check if element is within viewport
-    const isInViewport = (
-        rect.top >= 0 &&
-        rect.left >= 0 &&
-        rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-        rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-    );
-    
-    // Element might still be valid even if not in viewport, but we prioritize visible elements
-    return true;
-}
 
     private escapeSelector(selector: string): string {
         // If the selector contains potential special characters that need escaping
@@ -596,10 +551,10 @@ export class AutomationHandler implements IAutomationHandler {
 
     private async simulateHumanClick(element: Element) {
         // Add a visual indication of clicking
-        if (this.cursorElement) {
+        if (this.cursorManager.cursorElement) {
             try {
                 // Change cursor appearance to indicate a click
-                this.cursorElement.animate([
+                this.cursorManager.cursorElement.animate([
                     { transform: 'translate(-50%, -50%) scale(1)', filter: 'brightness(1)' },
                     { transform: 'translate(-50%, -50%) scale(0.7)', filter: 'brightness(1.5) hue-rotate(290deg)' },
                     { transform: 'translate(-50%, -50%) scale(1)', filter: 'brightness(1)' }
@@ -607,14 +562,14 @@ export class AutomationHandler implements IAutomationHandler {
                     duration: 400,
                     iterations: 1
                 });
-                
+
                 // Wait for animation to complete
                 await new Promise(resolve => setTimeout(resolve, 200));
             } catch (error) {
                 console.error('Error animating cursor click:', error);
             }
         }
-        
+
         const rect = element.getBoundingClientRect();
         const centerX = Math.floor(rect.left + rect.width / 2);
         const centerY = Math.floor(rect.top + rect.height / 2);
@@ -659,48 +614,48 @@ export class AutomationHandler implements IAutomationHandler {
     private async simulateHumanInput(element: HTMLInputElement, text: string) {
         // Focus the input element first
         element.focus();
-        
+
         // Clear existing value if any
         element.value = '';
-        
+
         // Indicate typing with cursor
-        if (this.cursorElement) {
+        if (this.cursorManager.cursorElement) {
             try {
                 // Change cursor to indicate it's about to type (using filter instead of background-color)
-                this.cursorElement.style.filter = 'hue-rotate(120deg) drop-shadow(0 0 5px rgba(0, 255, 100, 0.8))';
+                this.cursorManager.cursorElement.style.filter = 'hue-rotate(120deg) drop-shadow(0 0 5px rgba(0, 255, 100, 0.8))';
             } catch (error) {
                 console.error('Error changing cursor for typing:', error);
             }
         }
-        
+
         // Type characters with human-like delays
         for (let i = 0; i < text.length; i++) {
             const char = text.charAt(i);
-            
+
             // Add character to input
             element.value += char;
-            
+
             // Trigger input event
             element.dispatchEvent(new Event('input', { bubbles: true }));
-            
+
             // Random typing speed delay between 30-100ms
             const typingDelay = Math.floor(Math.random() * 70) + 30;
             await new Promise(resolve => setTimeout(resolve, typingDelay));
-            
+
             // Occasionally add a longer pause (1 in 8 chance)
             if (Math.random() < 0.125 && i < text.length - 1) {
                 await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 200));
             }
         }
-        
+
         // Return cursor to normal appearance
-        if (this.cursorElement) {
-            this.cursorElement.style.filter = 'drop-shadow(0 0 5px rgba(0, 150, 255, 0.8))';
+        if (this.cursorManager.cursorElement) {
+            this.cursorManager.cursorElement.style.filter = 'drop-shadow(0 0 5px rgba(0, 150, 255, 0.8))';
         }
-        
+
         // Trigger change event after completion
         element.dispatchEvent(new Event('change', { bubbles: true }));
-        
+
         // Small delay after typing completes
         await new Promise(resolve => setTimeout(resolve, 300));
     }
@@ -712,24 +667,24 @@ export class AutomationHandler implements IAutomationHandler {
             const element = await this.findElement(action);
             if (!element && action.type !== 'navigate' && action.type !== 'url') {
                 console.error('Element not found for action:', action);
-                
+
                 if (retryCount < 2) {
                     console.log(`Action failed, waiting and retrying (attempt ${retryCount + 1}/2)`);
                     await new Promise(resolve => setTimeout(resolve, 2000)); // Wait longer between retries
                     return this.executeAction(action, retryCount + 1);
                 }
-                
+
                 return false;
             }
-            
+
             // For actions that have a target element, move the cursor to it first
             if (element && action.type !== 'navigate' && action.type !== 'url') {
                 // Ensure cursor is properly initialized
-                if (!this.cursorElement) {
+                if (!this.cursorManager.cursorElement) {
                     console.log('Reinitializing cursor before action');
                     this.initializeCursor();
                 }
-                
+
                 // Log element details to help with debugging
                 if (this.debugMode) {
                     const rect = element.getBoundingClientRect();
@@ -743,36 +698,36 @@ export class AutomationHandler implements IAutomationHandler {
                             width: rect.width,
                             height: rect.height
                         },
-                        visible: this.isElementVisible(element)
+                        visible: this.elementFinder.isElementVisible(element)
                     });
                 }
-                
+
                 await this.scrollToElement(element);
-                
+
                 // Validate cursor is visible on the page
-                if (this.cursorElement) {
+                if (this.cursorManager.cursorElement) {
                     // Ensure cursor is in the DOM
-                    if (!document.body.contains(this.cursorElement)) {
+                    if (!document.body.contains(this.cursorManager.cursorElement)) {
                         console.log('Cursor was removed from DOM, re-appending');
-                        document.body.appendChild(this.cursorElement);
+                        document.body.appendChild(this.cursorManager.cursorElement);
                     }
-                    
+
                     // Ensure cursor has display style set to block before animation
-                    this.cursorElement.style.display = 'block';
-                    
+                    this.cursorManager.cursorElement.style.display = 'block';
+
                     // Brief pause to ensure display takes effect
                     await new Promise(resolve => setTimeout(resolve, 10));
                 }
-                
+
                 await this.moveCursorToElement(element);
             }
-            
+
             switch (action.type) {
                 case 'click':
                     if (!element) return false;
                     // Element is already scrolled into view and cursor is positioned
-                    await this.simulateHumanClick(element);
-                    
+                    await this.domActions.simulateHumanClick(element);
+
                     // Add a longer wait after clicking to ensure page updates
                     await new Promise(resolve => setTimeout(resolve, 1500));
                     break;
@@ -780,7 +735,10 @@ export class AutomationHandler implements IAutomationHandler {
                 case 'input':
                     if (!element || !action.text) return false;
                     // Element is already scrolled into view and cursor is positioned
-                    await this.simulateHumanInput(element as HTMLInputElement, action.text);
+                    await this.domActions.simulateHumanInput(
+                        element as HTMLInputElement,
+                        action.text
+                    );
                     break;
 
                 case 'scroll':
@@ -793,16 +751,16 @@ export class AutomationHandler implements IAutomationHandler {
                 case 'url':
                     if (!action.url) return false;
                     console.log(`Navigating to: ${action.url}`);
-                    
+
                     // Show a navigation indicator
-                    this.showNavigationFeedback(action.url);
-                    
+                    this.cursorManager.showNavigationFeedback(action.url);
+
                     // Wait a moment for the feedback to be visible
                     await new Promise(resolve => setTimeout(resolve, 800));
-                    
+
                     // Trigger navigation
                     window.location.href = action.url;
-                    
+
                     // Wait longer for navigation to complete
                     await new Promise(resolve => setTimeout(resolve, 3000));
                     break;
@@ -816,51 +774,51 @@ export class AutomationHandler implements IAutomationHandler {
 
             // After action completes, hide the cursor
             this.hideCursor();
-            
+
             console.log(`Action ${action.type} executed successfully`);
             return true;
         } catch (error) {
             console.error('Error executing action:', error);
-            
+
             // Hide cursor if there's an error
             this.hideCursor();
-            
+
             // If we haven't exceeded retries, try again
             if (retryCount < 2) {
                 console.log(`Action failed with error, retrying (attempt ${retryCount + 1}/2)`);
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 return this.executeAction(action, retryCount + 1);
             }
-            
+
             return false;
         }
     }
 
     async executeActions(actions: Action[]): Promise<boolean[]> {
         const results: boolean[] = [];
-        
+
         for (let i = 0; i < actions.length; i++) {
             const action = actions[i];
-            console.log(`Executing action ${i+1} of ${actions.length}:`, action.type);
-            
+            console.log(`Executing action ${i + 1} of ${actions.length}:`, action.type);
+
             try {
                 const success = await this.executeAction(action);
                 results.push(success);
-                
+
                 if (!success) {
-                    console.error(`Action ${i+1} (${action.type}) failed. Continuing with next action.`);
+                    console.error(`Action ${i + 1} (${action.type}) failed. Continuing with next action.`);
                 } else {
-                    console.log(`Action ${i+1} (${action.type}) completed successfully`);
+                    console.log(`Action ${i + 1} (${action.type}) completed successfully`);
                 }
-                
+
                 await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (error) {
-                console.error(`Unexpected error in action ${i+1} (${action.type}):`, error);
+                console.error(`Unexpected error in action ${i + 1} (${action.type}):`, error);
                 results.push(false);
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
-        
+
         console.log(`Executed ${actions.length} actions with results:`, results);
         return results;
     }
@@ -869,12 +827,12 @@ export class AutomationHandler implements IAutomationHandler {
      * Shows a visual feedback for navigation
      */
     private showNavigationFeedback(url: string): void {
-        if (!this.cursorElement) {
+        if (!this.cursorManager.cursorElement) {
             this.initializeCursor();
         }
-        
-        if (!this.cursorElement) return;
-        
+
+        if (!this.cursorManager.cursorElement) return;
+
         try {
             // Create a navigation feedback element with logo
             const navFeedback = document.createElement('div');
@@ -893,7 +851,7 @@ export class AutomationHandler implements IAutomationHandler {
             navFeedback.style.display = 'flex';
             navFeedback.style.alignItems = 'center';
             navFeedback.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-            
+
             // Add logo
             const logo = document.createElement('img');
             // Get URL for the logo image, falling back to a data URL if chrome isn't available
@@ -907,42 +865,42 @@ export class AutomationHandler implements IAutomationHandler {
             logo.style.height = '32px';
             logo.style.marginRight = '10px';
             navFeedback.appendChild(logo);
-            
+
             // Add text container
             const textContainer = document.createElement('div');
-            
+
             // Add heading
             const heading = document.createElement('div');
             heading.textContent = 'Navigator AI';
             heading.style.fontWeight = 'bold';
             heading.style.marginBottom = '5px';
             textContainer.appendChild(heading);
-            
+
             // Add message
             const message = document.createElement('div');
             message.textContent = `Navigating to: ${this.formatUrl(url)}`;
             textContainer.appendChild(message);
-            
+
             navFeedback.appendChild(textContainer);
-            
+
             document.body.appendChild(navFeedback);
-            
+
             // Display cursor at center of screen
-            this.cursorElement.style.transition = 'all 0.5s ease';
-            this.cursorElement.style.left = `${window.innerWidth / 2}px`;
-            this.cursorElement.style.top = `${window.innerHeight / 2}px`;
-            this.cursorElement.style.display = 'block';
-            
+            this.cursorManager.cursorElement.style.transition = 'all 0.5s ease';
+            this.cursorManager.cursorElement.style.left = `${window.innerWidth / 2}px`;
+            this.cursorManager.cursorElement.style.top = `${window.innerHeight / 2}px`;
+            this.cursorManager.cursorElement.style.display = 'block';
+
             // Use filter for orange glow effect
-            this.cursorElement.style.filter = 'hue-rotate(30deg) drop-shadow(0 0 5px rgba(255, 140, 0, 0.8))';
-            
+            this.cursorManager.cursorElement.style.filter = 'hue-rotate(30deg) drop-shadow(0 0 5px rgba(255, 140, 0, 0.8))';
+
             // Fade in the navigation message
             setTimeout(() => {
                 navFeedback.style.opacity = '1';
             }, 10);
-            
+
             // Animate cursor
-            this.cursorElement.animate([
+            this.cursorManager.cursorElement.animate([
                 { transform: 'translate(-50%, -50%) scale(1)' },
                 { transform: 'translate(-50%, -50%) scale(1.5)' },
                 { transform: 'translate(-50%, -50%) scale(1)' }
@@ -950,7 +908,7 @@ export class AutomationHandler implements IAutomationHandler {
                 duration: 800,
                 iterations: 1
             });
-            
+
             // Clean up after a delay
             setTimeout(() => {
                 navFeedback.style.opacity = '0';
@@ -964,7 +922,7 @@ export class AutomationHandler implements IAutomationHandler {
             console.error('Error showing navigation feedback:', error);
         }
     }
-    
+
     /**
      * Format URL for display
      */
