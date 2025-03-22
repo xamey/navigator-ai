@@ -141,18 +141,6 @@ export async function singleDOMProcessIteration(task_id: string): Promise<{
     try {
         console.log('Starting single DOM process iteration for task:', task_id);
         
-        const currentUrl = window.location.href;
-        const domainCheckResult = await checkDomainChange(currentUrl, task_id);
-        
-        if (domainCheckResult.domainChanged) {
-            console.log('Domain has changed, terminating workflow');
-            return { 
-                success: false, 
-                error: 'Domain changed, workflow terminated',
-                isDone: true 
-            };
-        }
-        
         // Capture main document HTML
         const htmlContent = document.documentElement.outerHTML;
         
@@ -302,43 +290,6 @@ export async function singleDOMProcessIteration(task_id: string): Promise<{
             error: error instanceof Error ? error.message : String(error)
         };
     }
-}
-
-/**
- * Check if domain has changed
- * @param currentUrl Current URL
- * @param task_id Task ID
- * @returns Promise with domain change check result
- */
-export async function checkDomainChange(currentUrl: string, task_id: string): Promise<{domainChanged: boolean}> {
-    return new Promise((resolve) => {
-        try {
-            // Use a timeout to prevent hanging if no response is received
-            const timeoutId = setTimeout(() => {
-                console.warn('Domain change check timed out, assuming no change');
-                resolve({ domainChanged: false });
-            }, 2000);
-            
-            chrome.runtime.sendMessage({
-                type: 'checkDomainChange',
-                currentUrl,
-                task_id
-            }, (response) => {
-                clearTimeout(timeoutId);
-                
-                if (chrome.runtime.lastError) {
-                    console.error('Error checking domain change:', chrome.runtime.lastError);
-                    // Default to false if there's an error
-                    resolve({ domainChanged: false });
-                } else {
-                    resolve({ domainChanged: !!response?.domainChanged });
-                }
-            });
-        } catch (error) {
-            console.error('Exception during domain change check:', error);
-            resolve({ domainChanged: false });
-        }
-    });
 }
 
 /**

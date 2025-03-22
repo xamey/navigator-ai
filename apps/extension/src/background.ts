@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { axiosInstance } from './constants/AxiosInstance';
 import { DOMUpdate, Message, ProcessingStatus } from './types';
 
@@ -190,11 +189,7 @@ chrome.runtime.onMessage.addListener(async (message: Message, sender, sendRespon
             // Reset the entire workflow
             await resetWorkflow();
             sendResponse({ success: true });
-        } else if (message.type === 'checkDomainChange' && message.currentUrl) {
-            // Check if domain has changed and if so, stop monitoring
-            const domainChanged = await checkDomainChange(message.currentUrl);
-            sendResponse({ success: true, domainChanged });
-        }
+        } 
     } catch (error) {
         console.error('Error in background script:', error);
         sendResponse({ success: false, error: 'Background script error' });
@@ -623,90 +618,4 @@ async function resetWorkflow() {
     }
     
     console.log('Workflow reset complete');
-}
-
-// Function to check if domain has changed
-async function checkDomainChange(currentUrl: string): Promise<boolean> {
-    try {
-        // Extract domain from URL
-        const getDomain = (url: string) => {
-            try {
-                const urlObj = new URL(url);
-                return urlObj.hostname;
-            } catch (error) {
-                console.error('Error parsing URL:', error);
-                return url; // Return original string if parsing fails
-            }
-        };
-        
-        // Get last processed URL from storage
-        const result = await chrome.storage.local.get(['taskState']);
-        const lastProcessedUrl = result.taskState?.lastProcessedUrl || '';
-        
-        // No previous URL, store current and return false
-        if (!lastProcessedUrl) {
-            if (result.taskState) {
-                await chrome.storage.local.set({
-                    taskState: {
-                        ...result.taskState,
-                        lastProcessedUrl: currentUrl
-                    }
-                });
-            } else {
-                // Create new taskState if it doesn't exist
-                await chrome.storage.local.set({
-                    taskState: {
-                        processingStatus: 'idle',
-                        lastUpdateTimestamp: new Date().toISOString(),
-                        lastProcessedUrl: currentUrl
-                    }
-                });
-            }
-            return false;
-        }
-        
-        // Compare domains
-        const currentDomain = getDomain(currentUrl);
-        const lastDomain = getDomain(lastProcessedUrl);
-        const domainChanged = currentDomain !== lastDomain;
-        
-        console.log('Domain check:', { currentDomain, lastDomain, domainChanged });
-        
-        // Always update the URL regardless of domain change
-        if (result.taskState) {
-            await chrome.storage.local.set({
-                taskState: {
-                    ...result.taskState,
-                    lastProcessedUrl: currentUrl
-                }
-            });
-        } else {
-            // Create new taskState if it doesn't exist
-            await chrome.storage.local.set({
-                taskState: {
-                    processingStatus: 'idle',
-                    lastUpdateTimestamp: new Date().toISOString(),
-                    lastProcessedUrl: currentUrl
-                }
-            });
-        }
-        
-        // If domain changed and we have an active session, stop monitoring
-        if (domainChanged && activeSession) {
-            console.log('Domain changed, stopping workflow');
-            
-            // Mark session as completed due to domain change
-            activeSession.status = 'completed';
-            await chrome.storage.local.set({ activeSession });
-            
-            // Stop monitoring
-            stopMonitoring();
-        }
-        
-        return domainChanged;
-    } catch (error) {
-        console.error('Error in checkDomainChange:', error);
-        // Default to false on any error
-        return false;
-    }
 }
