@@ -247,92 +247,6 @@ export class AutomationHandler implements IAutomationHandler {
         }
     }
 
-    private async moveCursorToElement(element: Element): Promise<void> {
-        if (!this.cursorManager.cursorElement) {
-            this.initializeCursor();
-        }
-
-        if (!this.cursorManager.cursorElement) {
-            if (this.debugMode) console.error('Cursor element is null after initialization attempt');
-            return; // In case initialization failed
-        }
-
-        try {
-            // Get the bounding rect of the element
-            const rect = element.getBoundingClientRect();
-
-            // Calculate the center position
-            const centerX = rect.left + rect.width / 2;
-            const centerY = rect.top + rect.height / 2;
-
-            if (this.debugMode) {
-                console.log(`Moving cursor to element at (${centerX}, ${centerY})`, element);
-            }
-
-            // Make the cursor visible
-            this.cursorManager.cursorElement.style.display = 'block';
-
-            // First position without animation
-            this.cursorManager.cursorElement.style.transition = 'none';
-            this.cursorManager.cursorElement.style.left = `${window.innerWidth / 2}px`;
-            this.cursorManager.cursorElement.style.top = `${window.innerHeight / 2}px`;
-
-            // Force reflow to ensure the initial position takes effect
-            void this.cursorManager.cursorElement.offsetWidth;
-
-            // Restore animation and move to target
-            this.cursorManager.cursorElement.style.transition = 'all 0.5s cubic-bezier(0.19, 1, 0.22, 1)';
-            this.cursorManager.cursorElement.style.left = `${centerX}px`;
-            this.cursorManager.cursorElement.style.top = `${centerY}px`;
-
-            // Use animations for cursor effects
-            this.cursorManager.cursorElement.animate([
-                { transform: 'translate(-50%, -50%) scale(0.8)', opacity: 0.7 },
-                { transform: 'translate(-50%, -50%) scale(1.2)', opacity: 1 },
-                { transform: 'translate(-50%, -50%) scale(1)', opacity: 0.9 }
-            ], {
-                duration: 600,
-                iterations: 1
-            });
-
-            // Wait for the cursor to arrive at its destination
-            await new Promise(resolve => setTimeout(resolve, 600));
-        } catch (error) {
-            console.error('Error moving cursor to element:', error);
-        }
-    }
-
-    private hideCursor(): void {
-        if (!this.cursorManager.cursorElement) return;
-
-        try {
-            // Animate the cursor fading out
-            this.cursorManager.cursorElement.animate([
-                { opacity: 1 },
-                { opacity: 0 }
-            ], {
-                duration: 300,
-                easing: 'ease-out',
-                fill: 'forwards'
-            });
-
-            // Actually hide the cursor after animation completes
-            setTimeout(() => {
-                if (this.cursorManager.cursorElement) {
-                    this.cursorManager.cursorElement.style.display = 'none';
-                    // Reset opacity after hiding
-                    this.cursorManager.cursorElement.style.opacity = '1';
-                }
-            }, 300);
-        } catch (error) {
-            // If animation fails, just hide it immediately
-            if (this.debugMode) {
-                console.error('Error hiding cursor with animation:', error);
-            }
-            this.cursorManager.cursorElement.style.display = 'none';
-        }
-    }
-
     private async findElement(action: Action, retryCount = 0): Promise<Element | null> {
         console.log(`Attempting to find element (attempt ${retryCount + 1})`, action);
 
@@ -486,32 +400,6 @@ export class AutomationHandler implements IAutomationHandler {
         return element;
     }
 
-    private isElementVisible(element: Element): boolean {
-        if (!element || !(element instanceof HTMLElement)) return false;
-
-        const style = window.getComputedStyle(element);
-        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-            return false;
-        }
-
-        // Check if element has zero size
-        const rect = element.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) {
-            return false;
-        }
-
-        // Check if element is within viewport
-        const isInViewport = (
-            rect.top >= 0 &&
-            rect.left >= 0 &&
-            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-        );
-
-        // Element might still be valid even if not in viewport, but we prioritize visible elements
-        return true;
-    }
-
     private escapeSelector(selector: string): string {
         // If the selector contains potential special characters that need escaping
         if (selector.includes(':') || selector.includes('.') || selector.includes('#')) {
@@ -549,69 +437,7 @@ export class AutomationHandler implements IAutomationHandler {
         await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    private async simulateHumanClick(element: Element) {
-        // Add a visual indication of clicking
-        if (this.cursorManager.cursorElement) {
-            try {
-                // Change cursor appearance to indicate a click
-                this.cursorManager.cursorElement.animate([
-                    { transform: 'translate(-50%, -50%) scale(1)', filter: 'brightness(1)' },
-                    { transform: 'translate(-50%, -50%) scale(0.7)', filter: 'brightness(1.5) hue-rotate(290deg)' },
-                    { transform: 'translate(-50%, -50%) scale(1)', filter: 'brightness(1)' }
-                ], {
-                    duration: 400,
-                    iterations: 1
-                });
-
-                // Wait for animation to complete
-                await new Promise(resolve => setTimeout(resolve, 200));
-            } catch (error) {
-                console.error('Error animating cursor click:', error);
-            }
-        }
-
-        const rect = element.getBoundingClientRect();
-        const centerX = Math.floor(rect.left + rect.width / 2);
-        const centerY = Math.floor(rect.top + rect.height / 2);
-
-        // Move mouse to element with a mousedown and mouseup event for more natural interaction
-        element.dispatchEvent(new MouseEvent('mouseover', {
-            view: window,
-            bubbles: true,
-            cancelable: true,
-            clientX: centerX,
-            clientY: centerY
-        }));
-
-        element.dispatchEvent(new MouseEvent('mousedown', {
-            view: window,
-            bubbles: true,
-            cancelable: true,
-            clientX: centerX,
-            clientY: centerY
-        }));
-
-        // Small delay between mousedown and mouseup/click
-        await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100));
-
-        element.dispatchEvent(new MouseEvent('mouseup', {
-            view: window,
-            bubbles: true,
-            cancelable: true,
-            clientX: centerX,
-            clientY: centerY
-        }));
-
-        element.dispatchEvent(new MouseEvent('click', {
-            view: window,
-            bubbles: true,
-            cancelable: true,
-            clientX: centerX,
-            clientY: centerY
-        }));
-    }
-
-    private async simulateHumanInput(element: HTMLInputElement, text: string) {
+    private async simulateHumanInput(element: HTMLInputElement, text: string, shouldPressEnter: boolean) {
         // Focus the input element first
         element.focus();
 
@@ -658,6 +484,16 @@ export class AutomationHandler implements IAutomationHandler {
 
         // Small delay after typing completes
         await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Press Enter if specified
+        if (shouldPressEnter) {
+            element.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                charCode: 13
+            }));
+        }
     }
 
     async executeAction(action: Action, retryCount = 0): Promise<boolean> {
@@ -670,22 +506,14 @@ export class AutomationHandler implements IAutomationHandler {
 
                 if (retryCount < 2) {
                     console.log(`Action failed, waiting and retrying (attempt ${retryCount + 1}/2)`);
-                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait longer between retries
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                     return this.executeAction(action, retryCount + 1);
                 }
 
                 return false;
             }
 
-            // For actions that have a target element, move the cursor to it first
             if (element && action.type !== 'navigate' && action.type !== 'url') {
-                // Ensure cursor is properly initialized
-                if (!this.cursorManager.cursorElement) {
-                    console.log('Reinitializing cursor before action');
-                    this.initializeCursor();
-                }
-
-                // Log element details to help with debugging
                 if (this.debugMode) {
                     const rect = element.getBoundingClientRect();
                     console.log('Element details:', {
@@ -703,48 +531,40 @@ export class AutomationHandler implements IAutomationHandler {
                 }
 
                 await this.scrollToElement(element);
-
-                // Validate cursor is visible on the page
-                if (this.cursorManager.cursorElement) {
-                    // Ensure cursor is in the DOM
-                    if (!document.body.contains(this.cursorManager.cursorElement)) {
-                        console.log('Cursor was removed from DOM, re-appending');
-                        document.body.appendChild(this.cursorManager.cursorElement);
-                    }
-
-                    // Ensure cursor has display style set to block before animation
-                    this.cursorManager.cursorElement.style.display = 'block';
-
-                    // Brief pause to ensure display takes effect
-                    await new Promise(resolve => setTimeout(resolve, 10));
-                }
-
-                await this.moveCursorToElement(element);
+                await this.cursorManager.moveCursorToElement(element);
             }
 
             switch (action.type) {
                 case 'click':
                     if (!element) return false;
-                    // Element is already scrolled into view and cursor is positioned
                     await this.domActions.simulateHumanClick(element);
-
-                    // Add a longer wait after clicking to ensure page updates
                     await new Promise(resolve => setTimeout(resolve, 1500));
                     break;
 
                 case 'input':
                     if (!element || !action.text) return false;
-                    // Element is already scrolled into view and cursor is positioned
+
+                    // Determine if we should press Enter after typing
+                    const shouldPressEnter =
+                        // For search inputs, always press Enter
+                        element.getAttribute('type') === 'search' ||
+                        // For forms with a single text input, press Enter
+                        (element instanceof HTMLInputElement &&
+                            element.form &&
+                            element.form.querySelectorAll('input[type="text"], input[type="search"], input:not([type])').length === 1) ||
+                        // If the element has a parent with role="search"
+                        !!element.closest('[role="search"]');
+
                     await this.domActions.simulateHumanInput(
                         element as HTMLInputElement,
-                        action.text
+                        action.text,
+                        shouldPressEnter
                     );
                     break;
 
                 case 'scroll':
                     if (!element) return false;
-                    // Element is already scrolled into view and cursor is positioned
-                    // No additional action needed for scroll
+                    // Element is already scrolled into view by this point
                     break;
 
                 case 'navigate':
@@ -752,7 +572,7 @@ export class AutomationHandler implements IAutomationHandler {
                     if (!action.url) return false;
                     console.log(`Navigating to: ${action.url}`);
 
-                    // Show a navigation indicator
+                    // Show navigation feedback using the cursorManager
                     this.cursorManager.showNavigationFeedback(action.url);
 
                     // Wait a moment for the feedback to be visible
@@ -767,13 +587,12 @@ export class AutomationHandler implements IAutomationHandler {
 
                 default:
                     console.error('Unknown action type:', action.type);
-                    // Hide cursor for unknown action types
-                    this.hideCursor();
+                    this.cursorManager.hideCursor();
                     return false;
             }
 
             // After action completes, hide the cursor
-            this.hideCursor();
+            this.cursorManager.hideCursor();
 
             console.log(`Action ${action.type} executed successfully`);
             return true;
@@ -781,7 +600,7 @@ export class AutomationHandler implements IAutomationHandler {
             console.error('Error executing action:', error);
 
             // Hide cursor if there's an error
-            this.hideCursor();
+            this.cursorManager.hideCursor();
 
             // If we haven't exceeded retries, try again
             if (retryCount < 2) {
@@ -855,12 +674,12 @@ export class AutomationHandler implements IAutomationHandler {
             // Add logo
             const logo = document.createElement('img');
             // Get URL for the logo image, falling back to a data URL if chrome isn't available
-            if (window.chrome && window.chrome.runtime) {
-                logo.src = window.chrome.runtime.getURL('assets/icon/logo.png');
-            } else {
-                // Fallback to a basic blue circle as a data URL if chrome API isn't available
-                logo.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxNiIgY3k9IjE2IiByPSIxNCIgZmlsbD0id2hpdGUiIHN0cm9rZT0icmdiKDAsIDE1MCwgMjU1KSIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iMTEiIHk9IjIwIiBmaWxsPSJyZ2IoMCwgMTUwLCAyNTUpIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtd2VpZ2h0PSJib2xkIiBmb250LXNpemU9IjE0Ij5OPC90ZXh0Pjwvc3ZnPg==';
-            }
+            // if (window.chrome && window.chrome.runtime) {
+            //     logo.src = window.chrome.runtime.getURL('/icon/logo.png');
+            // } else {
+            //     // Fallback to a basic blue circle as a data URL if chrome API isn't available
+            // }
+            logo.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxNiIgY3k9IjE2IiByPSIxNCIgZmlsbD0id2hpdGUiIHN0cm9rZT0icmdiKDAsIDE1MCwgMjU1KSIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iMTEiIHk9IjIwIiBmaWxsPSJyZ2IoMCwgMTUwLCAyNTUpIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtd2VpZ2h0PSJib2xkIiBmb250LXNpemU9IjE0Ij5OPC90ZXh0Pjwvc3ZnPg==';
             logo.style.width = '32px';
             logo.style.height = '32px';
             logo.style.marginRight = '10px';

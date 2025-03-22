@@ -93,11 +93,11 @@ export class CursorManager {
             this.cursorElement = document.createElement('img');
             this.cursorElement.id = 'navigator-ai-cursor';
 
-            if (window.chrome && window.chrome.runtime) {
-                this.cursorElement.src = window.chrome.runtime.getURL('assets/icon/cursor.png');
-            } else {
-                this.cursorElement.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxNiIgY3k9IjE2IiByPSIxNCIgZmlsbD0icmdiYSg3NSwgMjAwLCAyNTUsIDAuNSkiIHN0cm9rZT0icmdiKDAsIDE1MCwgMjU1KSIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9zdmc+';
-            }
+            // if (window.chrome && window.chrome.runtime) {
+            //     this.cursorElement.src = window.chrome.runtime.getURL('assets/icon/cursor.png');
+            // } else {
+            // }
+            this.cursorElement.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxNiIgY3k9IjE2IiByPSIxNCIgZmlsbD0icmdiYSg3NSwgMjAwLCAyNTUsIDAuNSkiIHN0cm9rZT0icmdiKDAsIDE1MCwgMjU1KSIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9zdmc+';
 
             this.cursorElement.style.position = 'fixed';
             this.cursorElement.style.width = `${this.cursorSize}px`;
@@ -120,8 +120,8 @@ export class CursorManager {
                 debugOverlay.style.right = '10px';
                 debugOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
                 debugOverlay.style.color = 'white';
-                debugOverlay.style.padding = '5px 10px';
-                debugOverlay.style.borderRadius = '5px';
+                debugOverlay.style.padding = '3px 6px';
+                debugOverlay.style.borderRadius = '3px';
                 debugOverlay.style.fontFamily = 'monospace';
                 debugOverlay.style.fontSize = '12px';
                 debugOverlay.style.zIndex = '2147483646';
