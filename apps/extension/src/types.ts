@@ -1,6 +1,6 @@
 // src/types.ts
 import { DOMHashMap } from "@navigator-ai/core";
-import { Action } from "@navigator-ai/core";
+import { Action, ExecuteActionResult } from "@navigator-ai/core";
 
 export interface FrontendDOMState {
     url: string;
@@ -32,6 +32,7 @@ export interface Message {
     status?: ProcessingStatus;
     isDone?: boolean;   // Property for signaling if processing is complete
     currentUrl?: string; // Current URL for domain change detection
+    iterationResults?: ExecuteActionResult[];
 }
 
 // Processing status for DOM operations

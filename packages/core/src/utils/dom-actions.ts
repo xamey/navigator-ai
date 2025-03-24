@@ -14,7 +14,6 @@ export class DomActions {
         const centerX = Math.floor(rect.left + rect.width / 2);
         const centerY = Math.floor(rect.top + rect.height / 2);
 
-        // Mouse over first
         element.dispatchEvent(new MouseEvent('mouseover', {
             view: window,
             bubbles: true,
@@ -23,7 +22,6 @@ export class DomActions {
             clientY: centerY
         }));
 
-        // Mouse down
         element.dispatchEvent(new MouseEvent('mousedown', {
             view: window,
             bubbles: true,
@@ -32,10 +30,8 @@ export class DomActions {
             clientY: centerY
         }));
 
-        // Add a small delay between down and up for realism
         await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100));
 
-        // Mouse up
         element.dispatchEvent(new MouseEvent('mouseup', {
             view: window,
             bubbles: true,
@@ -44,7 +40,6 @@ export class DomActions {
             clientY: centerY
         }));
 
-        // Click
         element.dispatchEvent(new MouseEvent('click', {
             view: window,
             bubbles: true,
@@ -53,7 +48,6 @@ export class DomActions {
             clientY: centerY
         }));
 
-        // Wait a bit to ensure click is processed
         await new Promise(resolve => setTimeout(resolve, 300));
     }
 

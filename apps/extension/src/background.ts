@@ -1,3 +1,4 @@
+import { ExecuteActionResult } from '@navigator-ai/core';
 import { axiosInstance } from './constants/AxiosInstance';
 import { DOMUpdate, Message, ProcessingStatus } from './types';
 
@@ -7,6 +8,8 @@ const API_BASE_URL = 'http://localhost:8000';
 let monitoringInterval: NodeJS.Timeout | null = null;
 let currentIterations = 0;
 let isPaused = false;
+
+// let iterationResults: ExecuteActionResult[] = [];
 
 let lastUpdateResponse: { 
     timestamp: string; 
@@ -234,14 +237,21 @@ async function handleDOMUpdate(message: Message) {
         // Update status to indicate we're in the update process
         await updateProcessingStatus(message.task_id, 'updating');
 
+        let iterationResults: {task_id: string, result: ExecuteActionResult[]}[] = (await chrome.storage.local.get('iterationResults')).iterationResults || [];
+
+        iterationResults = iterationResults.filter(result => result.task_id === message.task_id);
+
         // The DOM structure is already parsed by the content script
         const updateData: DOMUpdate = {
             task_id: message.task_id,
             dom_data: message.dom_data,
-            result: Array.isArray(message.result) ? message.result : [],
+            result: iterationResults,
             iterations: currentIterations,
             structure: message.dom_data.structure ?? {}
         };
+
+        console.log("Request")
+        console.log(updateData)
 
         await chrome.storage.local.set({
             currentDOMUpdate: {
@@ -447,7 +457,7 @@ async function startMonitoring(task_id: string) {
             const response = await new Promise<any>((resolve) => {
                 chrome.tabs.sendMessage(tabId, {
                     type: 'singleDOMProcess',
-                    task_id
+                    task_id,
                 }, (result) => {
                     if (chrome.runtime.lastError) {
                         console.error('Error sending message:', chrome.runtime.lastError);
