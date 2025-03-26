@@ -237,7 +237,7 @@ async function handleDOMUpdate(message: Message) {
         // Update status to indicate we're in the update process
         await updateProcessingStatus(message.task_id, 'updating');
 
-        let iterationResults: {task_id: string, result: ExecuteActionResult[]}[] = (await chrome.storage.local.get('iterationResults')).iterationResults || [];
+        let iterationResults: {task_id: string, result: ExecuteActionResult[]}[] = (await chrome.storage.local.get(['iterationResults'])).iterationResults || [];
 
         iterationResults = iterationResults.filter(result => result.task_id === message.task_id);
 

@@ -370,7 +370,7 @@ export class AutomationHandler implements IAutomationHandler {
                     return this.executeAction(action, retryCount + 1);
                 }
 
-                return { success: false, message: `Element not found at any selector or xpath for action config: ${action}` };
+                return { success: false, message: `Element not found for action type: ${action.type}${action.selector ? `, selector: ${action.selector}` : ''}${action.xpath_ref ? `, xpath: ${action.xpath_ref}` : ''}${action.element_id ? `, element_id: ${action.element_id}` : ''}` };
             }
 
             if (element && action.type !== 'navigate' && action.type !== 'url') {
@@ -394,15 +394,15 @@ export class AutomationHandler implements IAutomationHandler {
                 await this.cursorManager.moveCursorToElement(element);
             }
 
-            if (!element)
+            if (!element && (action.type !== 'navigate' && action.type !== 'url'))
                 return {
                     success: false,
-                    message: `Element not found at any selector or xpath for action config: ${action}`
+                    message: `Element not found for action type: ${action.type}${action.selector ? `, selector: ${action.selector}` : ''}${action.xpath_ref ? `, xpath: ${action.xpath_ref}` : ''}${action.element_id ? `, element_id: ${action.element_id}` : ''}`
                 }
 
             switch (action.type) {
                 case 'click':
-                    await this.domActions.simulateHumanClick(element);
+                    await this.domActions.simulateHumanClick(element!);
                     await new Promise(resolve => setTimeout(resolve, 1500));
                     break;
 
@@ -410,7 +410,7 @@ export class AutomationHandler implements IAutomationHandler {
                     if (!action.text)
                         return {
                             success: false,
-                            message: `Action ${action} could not be executed as text not provided`
+                            message: `Action type '${action.type}' could not be executed as text was not provided`
                         }
                     await this.domActions.simulateHumanInput(
                         element as HTMLInputElement,
@@ -425,7 +425,7 @@ export class AutomationHandler implements IAutomationHandler {
 
                 case 'navigate':
                 case 'url':
-                    if (!action.url) return {success: false, message: `Action ${action} could not be executed as url not provided`};
+                    if (!action.url) return {success: false, message: `Action type '${action.type}' could not be executed as url was not provided`};
                     console.log(`Navigating to: ${action.url}`);
 
                     this.cursorManager.showNavigationFeedback(action.url);
@@ -442,7 +442,7 @@ export class AutomationHandler implements IAutomationHandler {
                     this.cursorManager.hideCursor();
                     return {
                         success: false,
-                        message: `Unknown action type: ${action}`
+                        message: `Unknown action type: '${action.type}'`
                     };
             }
 
@@ -451,7 +451,7 @@ export class AutomationHandler implements IAutomationHandler {
             console.log(`Action ${action.type} executed successfully`);
             return {
                 success: true,
-                message: `Action ${action} executed successfully`
+                message: `Action type '${action.type}' executed successfully${action.selector ? ` on selector: ${action.selector}` : ''}${action.xpath_ref ? ` on xpath: ${action.xpath_ref}` : ''}${action.element_id ? ` on element_id: ${action.element_id}` : ''}${action.url ? ` with url: ${action.url}` : ''}${action.text ? ` with text input` : ''}`
             };
         } catch (error) {
             console.error('Error executing action:', error);
@@ -466,7 +466,7 @@ export class AutomationHandler implements IAutomationHandler {
 
             return {
                 success: false,
-                message: `Failed to execute action for config ${action}`
+                message: `Failed to execute action type: '${action.type}'${action.selector ? `, selector: ${action.selector}` : ''}${action.xpath_ref ? `, xpath: ${action.xpath_ref}` : ''}${action.element_id ? `, element_id: ${action.element_id}` : ''}${action.url ? `, url: ${action.url}` : ''}${action.text ? `, text length: ${action.text.length}` : ''}`
             };
         }
     }
@@ -493,7 +493,7 @@ export class AutomationHandler implements IAutomationHandler {
                 console.error(`Unexpected error in action ${i + 1} (${action.type}):`, error);
                 results.push({
                     success: false,
-                    message: `Unexpected error in action ${i + 1} (${action.type}): error: ${error}`
+                    message: `Unexpected error in action ${i + 1} (${action.type})${action.selector ? `, selector: ${action.selector}` : ''}${action.xpath_ref ? `, xpath: ${action.xpath_ref}` : ''}${action.element_id ? `, element_id: ${action.element_id}` : ''}: error: ${error}`
                 });
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }

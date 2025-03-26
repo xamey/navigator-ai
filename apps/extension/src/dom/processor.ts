@@ -217,14 +217,14 @@ export async function singleDOMProcessIteration(task_id: string): Promise<{
                 });
                 
                 const actionResults = await handleAutomationActions(actions);
-                console.log('Action execution results:', actionResults);
-
-                const iterationResults = (await chrome.storage.local.get(['iterationResults']))?.iterationResults || [];
-                iterationResults.push({
+                
+                const iterationResults = (await chrome.storage.local.get(['iterationResults'])).iterationResults || [];
+                iterationResults?.push({
                     task_id,
                     actionResults
                 });
                 await chrome.storage.local.set({ iterationResults });
+                console.log('Action execution results:', actionResults, iterationResults);
 
                 // Mark status as completed after actions are done
                 await chrome.runtime.sendMessage({
