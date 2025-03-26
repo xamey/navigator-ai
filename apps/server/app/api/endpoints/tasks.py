@@ -37,7 +37,7 @@ async def update_task(update: DOMUpdate):
         task_text = TaskService.get_task(update.task_id)
         
         task_history = TaskService.get_task_history(update.task_id)
-        print(f"Retrieved history for task {update.task_id}: {len(task_history)} entries")
+        print(f"Retrieved history for task {update.task_id}: {len(task_history)} entries with {update.result} results")
         
         user_message, xpath_map, selector_map = build_user_message(
             dom_state=dom_state,

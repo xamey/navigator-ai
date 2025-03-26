@@ -64,12 +64,12 @@ class EnhancedHighlightStyleMapper:
             if element_line:
                 output_lines.append(element_line)
         
-        standalone_text = self._extract_standalone_text(dom_hashmap)
-        if standalone_text:
-            if output_lines:
-                output_lines.append("")
-            output_lines.append("# Additional Page Text")
-            output_lines.extend(standalone_text)
+        # standalone_text = self._extract_standalone_text(dom_hashmap)
+        # if standalone_text:
+        #     if output_lines:
+        #         output_lines.append("")
+        #     output_lines.append("# Additional Page Text")
+        #     output_lines.extend(standalone_text)
         
         if not output_lines:
             return "No interactive elements found on page", {}, {}

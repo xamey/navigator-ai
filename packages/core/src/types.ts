@@ -3,7 +3,6 @@ export interface DOMCoordinates {
     y: number;
 }
 
-// Set of coordinates describing element position
 export interface CoordinateSet {
     topLeft: DOMCoordinates;
     topRight: DOMCoordinates;
@@ -14,7 +13,6 @@ export interface CoordinateSet {
     height: number;
 }
 
-// Viewport information
 export interface ViewportInfo {
     scrollX: number;
     scrollY: number;
@@ -22,7 +20,6 @@ export interface ViewportInfo {
     height: number;
 }
 
-// Element node representation
 export interface DOMElementNode {
     tagName: string;
     attributes: Record<string, string>;
@@ -45,10 +42,8 @@ export interface DOMTextNode {
     isVisible: boolean;
 }
 
-// Union type for any node
 export type DOMNode = DOMElementNode | DOMTextNode;
 
-// The complete DOM hash map
 export interface DOMHashMap {
     [id: string]: DOMNode;
 }
@@ -64,3 +59,14 @@ export interface Action {
     amount?: number;
     url?: string;
 } 
+
+export interface AutomationOptions {
+    debug?: boolean;
+    cursorSize?: number;
+    cursorUI?: string;
+}
+
+export interface ExecuteActionResult {
+    success: boolean
+    message: string
+}

@@ -1,4 +1,4 @@
-import { parseDOMonServer } from '@navigator-ai/core';
+import { ExecuteActionResult, parseDOMonServer } from '@navigator-ai/core';
 import { Action } from '@navigator-ai/core';
 import { FrontendDOMState, ProcessingStatus } from '../types';
 import { captureIframeContents } from './iframe';
@@ -131,27 +131,17 @@ export async function sequentialDOMProcessing(task_id: string, maxIterations = 1
 /**
  * Perform a single iteration of DOM processing
  * @param task_id The task ID
+ * @param iterationResults The results of previous iterations
  * @returns Promise with the result of the processing
  */
 export async function singleDOMProcessIteration(task_id: string): Promise<{ 
     success: boolean; 
     error?: string;
     isDone?: boolean;
+    results?: ExecuteActionResult[]
 }> {
     try {
         console.log('Starting single DOM process iteration for task:', task_id);
-        
-        const currentUrl = window.location.href;
-        const domainCheckResult = await checkDomainChange(currentUrl, task_id);
-        
-        if (domainCheckResult.domainChanged) {
-            console.log('Domain has changed, terminating workflow');
-            return { 
-                success: false, 
-                error: 'Domain changed, workflow terminated',
-                isDone: true 
-            };
-        }
         
         // Capture main document HTML
         const htmlContent = document.documentElement.outerHTML;
@@ -183,8 +173,7 @@ export async function singleDOMProcessIteration(task_id: string): Promise<{
         chrome.runtime.sendMessage({
             type: 'dom_update',
             task_id,
-            dom_data: domData,
-            result: []
+            dom_data: domData
         });
         
         // Instead of relying on message response, wait for the processing status to change
@@ -228,8 +217,15 @@ export async function singleDOMProcessIteration(task_id: string): Promise<{
                 });
                 
                 const actionResults = await handleAutomationActions(actions);
-                console.log('Action execution results:', actionResults);
                 
+                const iterationResults = (await chrome.storage.local.get(['iterationResults'])).iterationResults || [];
+                iterationResults?.push({
+                    task_id,
+                    actionResults
+                });
+                await chrome.storage.local.set({ iterationResults });
+                console.log('Action execution results:', actionResults, iterationResults);
+
                 // Mark status as completed after actions are done
                 await chrome.runtime.sendMessage({
                     type: 'updateProcessingStatus',
@@ -302,43 +298,6 @@ export async function singleDOMProcessIteration(task_id: string): Promise<{
             error: error instanceof Error ? error.message : String(error)
         };
     }
-}
-
-/**
- * Check if domain has changed
- * @param currentUrl Current URL
- * @param task_id Task ID
- * @returns Promise with domain change check result
- */
-export async function checkDomainChange(currentUrl: string, task_id: string): Promise<{domainChanged: boolean}> {
-    return new Promise((resolve) => {
-        try {
-            // Use a timeout to prevent hanging if no response is received
-            const timeoutId = setTimeout(() => {
-                console.warn('Domain change check timed out, assuming no change');
-                resolve({ domainChanged: false });
-            }, 2000);
-            
-            chrome.runtime.sendMessage({
-                type: 'checkDomainChange',
-                currentUrl,
-                task_id
-            }, (response) => {
-                clearTimeout(timeoutId);
-                
-                if (chrome.runtime.lastError) {
-                    console.error('Error checking domain change:', chrome.runtime.lastError);
-                    // Default to false if there's an error
-                    resolve({ domainChanged: false });
-                } else {
-                    resolve({ domainChanged: !!response?.domainChanged });
-                }
-            });
-        } catch (error) {
-            console.error('Exception during domain change check:', error);
-            resolve({ domainChanged: false });
-        }
-    });
 }
 
 /**

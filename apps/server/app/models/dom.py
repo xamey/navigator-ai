@@ -67,6 +67,9 @@ class DOMUpdateResponse(BaseModel):
     message: str
     result: Any
 
+class ExecuteActionResult(BaseModel):
+    success: bool
+    result: Any
 
 class DOMState(BaseModel):
     url: str
