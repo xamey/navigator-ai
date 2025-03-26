@@ -11,7 +11,7 @@ Navigator AI empowers users and developers to seamlessly automate tasks within w
 - A **component library** for direct integration into web applications
 - A **browser extension** for end-user automation
 
-Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [Browser-Use](https://github.com/browser-use/browser-use) as Navigator AI is insppired from them and currently is a kind of an chrome extension version that does what they do inside but inside your browser.
+Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [Browser-Use](https://github.com/browser-use/browser-use) as Navigator AI is inspired by them and currently is a kind of an Chrome extension version that does what they do inside but inside your browser.
 
 ## Key Features
 
