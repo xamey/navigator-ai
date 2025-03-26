@@ -89,7 +89,7 @@ Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [B
    npm run dev:server
    ```
 
-5. Run Redis
+5. **Run Redis**
 
    ```bash
    cd apps/server
