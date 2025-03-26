@@ -1,6 +1,5 @@
-# Navigator AI
-
 <div align="center">
+  <h1> Navigator AI</h1>
   <h2>Intelligent Automation Within the Browser</h2>
   <p><em>Open-source browser automation powered by Gemini 2.5 Pro-exp</em></p>
 </div>
