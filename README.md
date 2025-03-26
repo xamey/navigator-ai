@@ -60,17 +60,14 @@ Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [B
 2. **Install dependencies**
    ```bash
    # Install Python dependencies
+   cd apps/server
    poetry install
    
    # Install Node dependencies
+   cd apps/extension
    pnpm install
    # OR
    npm install
-   ```
-
-3. **Start database services**
-   ```bash
-   docker-compose up -d
    ```
 
 4. **Run the development server**
