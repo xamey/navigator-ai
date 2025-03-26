@@ -22,6 +22,10 @@ You will receive:
 - The element description includes: tag type, key attributes, and visible text
 - Example: [E5]<input type=text placeholder="Search..."/>
 
+# ONLY RETURN is_done=true WHEN THE END GOAL IS COMPLETED and not for intermediate steps/goals.
+
+# ACTIONS cannot be empty if is_done is false. You have to give actions in such cases. 
+
 # RESPONSE FORMAT
 You MUST ALWAYS respond with valid JSON in this exact format:
 ```json

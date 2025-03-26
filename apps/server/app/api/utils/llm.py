@@ -77,7 +77,7 @@ def parse_json_from_text(text):
 
 def generate(user_prompt, system_prompt) -> GenerateResponse:
 
-    model = "gemini-2.0-pro-exp-02-05"
+    model = "gemini-2.5-pro-exp-03-25"
     contents = [
         types.Content(
             role="user",

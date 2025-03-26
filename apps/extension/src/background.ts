@@ -454,6 +454,9 @@ async function startMonitoring(task_id: string) {
                 });
             }
             
+            // wait for full page to load roughly for 3 seconds
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
             const response = await new Promise<any>((resolve) => {
                 chrome.tabs.sendMessage(tabId, {
                     type: 'singleDOMProcess',
