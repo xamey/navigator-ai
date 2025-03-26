@@ -25,14 +25,16 @@ Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [B
 
 ## Technology Stack
 
-- **Frontend**: 
+- **Frontend**:
+
   - React, Vite, TypeScript (for both component library and extension)
   - Packaged in a Turborepo for efficient management
 
-- **Backend**: 
+- **Backend**:
+
   - Python, FastAPI
 
-- **Database**: 
+- **Database**:
   - PostgreSQL (primary data storage)
   - Redis (caching)
   - Weaviate (vector database, deployed via Docker)
@@ -48,21 +50,24 @@ Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [B
 - Python 3.9+ - [Install Guide](https://www.python.org/downloads/)
 - Poetry (Python dependency management) - [Install Guide](https://python-poetry.org/docs/#installation)
 - Docker and Docker Compose (for database services) - [Install Guide](https://docs.docker.com/get-docker/)
+- A Gemini API key, that you can create here : https://aistudio.google.com/apikey
 
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
-   git clone https://github.com/yourusername/navigator-ai.git
+   git clone https://github.com/SohamRatnaparkhi/navigator-ai.git
    cd navigator-ai
    ```
 
 2. **Install dependencies**
+
    ```bash
    # Install Python dependencies
    cd apps/server
    poetry install
-   
+
    # Install Node dependencies
    cd apps/extension
    pnpm install
@@ -70,7 +75,14 @@ Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [B
    npm install
    ```
 
+3. **Add Gemini API key**
+
+   ```bash
+   echo "GEMINI_API_KEY=YOUR_GEMINI_API_KEY" > /apps/server/.env
+   ```
+
 4. **Run the development server**
+
    ```bash
    pnpm run dev:server
    # OR
@@ -78,20 +90,23 @@ Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [B
    ```
 
 5. Run Redis
-     ```bash
-     cd apps/server
-     docker compose up -d
-     ```
 
-5. **Build and install the extension**
+   ```bash
+   cd apps/server
+   docker compose up -d
+   ```
+
+6. **Build and install the extension**
+
    ```bash
    # Build the extension
    pnpm run build
    # OR
    npm run build
    ```
-   
+
    Then:
+
    - Open Chrome and navigate to `chrome://extensions`
    - Enable "Developer mode" (toggle in the top-right corner)
    - Click "Load unpacked" and select the `/apps/extension/dist` directory
@@ -100,7 +115,9 @@ Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [B
 ## Roadmap
 
 ### Core Functionality
+
 - [ ] **Visual Task Builder (Extension)**
+
   - Develop a drag-and-drop interface for creating automation workflows
   - Add support for conditional logic and branching
 
@@ -109,7 +126,9 @@ Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [B
   - Add support for handling dynamic content
 
 ### Intelligence & Learning
+
 - [ ] **Self-Improving Agents**
+
   - Implement feedback loops to learn from user corrections
   - Track user activity patterns (with permission) to improve automation
   - Develop metrics for measuring and reporting agent improvement
@@ -120,7 +139,9 @@ Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [B
   - Add support for importing existing documentation
 
 ### Integration & Expansion
+
 - [ ] **Third-party Integrations**
+
   - Website-specific integrations (AWS, GCP, Amazon, etc.)
   - Multiple LLM provider support
   - API connections to popular services
@@ -131,7 +152,9 @@ Consider it as Cursor/Windsurf for websites and applications. Big shoutout to [B
   - Intelligent error recovery and pause mechanisms
 
 ### User Experience
+
 - [ ] **Workflow Management**
+
   - Record and replay functionality for capturing user workflows
   - Scheduled tasks with time/interval specifications
   - Workflow sharing and importing capabilities
